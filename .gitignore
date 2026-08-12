@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+*.log
+
+# Virtual envs
+.venv/
+venv/
+env/
+backend/.venv/
+
+# Django
+backend/media/
+backend/staticfiles/
+backend/.env
+backend/.env.*
+*.sqlite3
+
+# Node / Next.js
+portal/node_modules/
+portal/.next/
+portal/out/
+portal/.env
+portal/.env.local
+portal/.env.*
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Misc
+*.swp
+*.swo

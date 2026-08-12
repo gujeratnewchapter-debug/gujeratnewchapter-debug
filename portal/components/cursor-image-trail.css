@@ -1,0 +1,39 @@
+.cursor-image-trail {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 75; /* below nav (likely ~100) but above background */
+}
+
+.cursor-trail-item {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,0.12));
+}
+
+.cursor-trail-img {
+  display: block;
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  opacity: 1;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+}
+
+@media (max-width: 1200px) {
+  .cursor-trail-img { width: 110px; height: 110px; }
+}
+
+@media (max-width: 900px) {
+  .cursor-trail-img { width: 84px; height: 84px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-image-trail { display: none !important; }
+}
