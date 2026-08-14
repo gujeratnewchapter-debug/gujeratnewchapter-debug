@@ -33,7 +33,7 @@ const AI_MODES = [
 
 const STEPS = [
   { title: 'Enroll in a course', desc: 'Pick a path in entrepreneurship, AI, finance, marketing, or leadership \u2014 most start free.' },
-  { title: 'Learn with AI at every step', desc: 'Watch, read, and ask your AI Tutor questions the moment something doesn\u2019t click.' },
+  { title: 'Learn with AI at every step', desc: 'Watch, read, and ask your AI Tutor questions the moment something didn\u2019t click.' },
   { title: 'Pass to unlock, then get certified', desc: 'Clear each lesson\u2019s quiz to move forward, and earn a QR-verified certificate on completion.' },
 ];
 function resolveImageUrl(image?: string | null) {

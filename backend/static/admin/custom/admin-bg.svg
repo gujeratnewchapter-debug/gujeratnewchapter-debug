@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="600" fill="url(#g)" />
+  <g fill="rgba(255,255,255,0.08)">
+    <circle cx="200" cy="150" r="120" />
+    <circle cx="1000" cy="450" r="180" />
+  </g>
+  <text x="50%" y="55%" text-anchor="middle" font-size="64" fill="rgba(255,255,255,0.12)" font-family="sans-serif">Ethiopian Startup School</text>
+</svg>

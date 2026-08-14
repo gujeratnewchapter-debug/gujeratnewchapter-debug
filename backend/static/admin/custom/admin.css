@@ -1,3 +1,33 @@
+/* Custom admin styles: add a subtle background image and center the login box */
+html, body {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background-image: url('/static/admin/custom/admin-bg.svg');
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: cover;
+  background-color: #0f172a; /* dark fallback */
+  color: #e6eef8;
+}
+
+/* Make admin content slightly translucent on top of background */
+.container, .module, .dashboard, #content-main, .module caption {
+  background: rgba(255,255,255,0.04);
+}
+
+/* Center the login form vertically */
+body.login #content, body.login #content-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+
+.login h1 a {
+  color: #fff;
+}
 :root {
   color-scheme: light;
   --admin-bg: #f4f7fc;

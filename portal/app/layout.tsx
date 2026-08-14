@@ -9,6 +9,9 @@ import CursorImageTrail from '@/components/CursorImageTrail';
 export const metadata: Metadata = {
   title: 'Ethiopian Startup School',
   description: 'Learn entrepreneurship, AI, and business — with an AI Tutor at every step.',
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
