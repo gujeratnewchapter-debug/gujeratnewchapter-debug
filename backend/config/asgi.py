@@ -1,13 +1,8 @@
-"""
-ASGI config for config project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
-"""
-
 import os
+
+# Do NOT hardcode secrets in source. Read the OpenRouter API key from
+# an environment variable named `OPENROUTER_API_KEY`.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 from django.core.asgi import get_asgi_application
 
