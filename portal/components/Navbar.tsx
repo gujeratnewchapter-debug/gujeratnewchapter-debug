@@ -33,7 +33,7 @@ export function Navbar() {
 
   return (
     <>
-      <header className="site-header">
+      <header className="site-header" suppressHydrationWarning>
         <div className="container header-inner">
           <Link href="/" className="brand-link">
             <Lightbulb size={22} color="var(--accent)" fill="var(--accent)" />
