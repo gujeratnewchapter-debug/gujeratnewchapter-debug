@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Lock, PlayCircle, FileText, Presentation, Headphones, Code, Radio, BookOpen } from 'lucide-react';
 import { getCourses, getMyEnrollments, enroll, getCourse } from '@/lib/api';
@@ -16,6 +16,7 @@ export default function CourseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [course, setCourse] = useState<any>(null);
   const [enrollment, setEnrollment] = useState<any>(null);
   const [enrolling, setEnrolling] = useState(false);
@@ -25,6 +26,22 @@ export default function CourseDetailPage() {
   }, [slug, isAuthenticated]);
 
   async function load() {
+    const idParam = searchParams?.get('id');
+    if (idParam) {
+      try {
+        const { data: detail } = await getCourse(idParam);
+        setCourse(detail);
+        if (isAuthenticated) {
+          const my = await getMyEnrollments();
+          const existing = (my.data.results ?? my.data).find((e: any) => e.course === detail.id);
+          setEnrollment(existing ?? null);
+        }
+        return;
+      } catch (err) {
+        // fall back to search-based lookup below
+      }
+    }
+
     const { data } = await getCourses({ search: slug });
     const list = data.results ?? data;
     const match = list.find((c: any) => c.slug === slug) ?? list[0];

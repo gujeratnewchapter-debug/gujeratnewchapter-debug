@@ -1,8 +1,12 @@
+from django.conf import settings
 from django.utils import timezone
+from django.core.files.base import ContentFile
 from rest_framework import viewsets, permissions
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from certificates.models import Certificate
+from certificates.views import generate_certificate_pdf
 from .models import Quiz, Question, Choice, QuizAttempt, Answer
 from .serializers import (
     QuizSerializer, QuizInstructorSerializer, QuizSubmitSerializer, QuizAttemptResultSerializer,
@@ -99,6 +103,32 @@ class QuizViewSet(viewsets.ModelViewSet):
                     status=403,
                 )
 
+        if quiz.is_final_exam and quiz.section_id:
+            from enrollments.models import LessonProgress
+            required_lesson_ids = list(quiz.section.lessons.values_list('id', flat=True))
+            if required_lesson_ids:
+                completed = LessonProgress.objects.filter(
+                    enrollment__student=request.user,
+                    enrollment__course=quiz.section.course,
+                    lesson_id__in=required_lesson_ids,
+                    is_completed=True,
+                ).values_list('lesson_id', flat=True)
+                if len(set(required_lesson_ids)) != len(set(completed)):
+                    return Response({"detail": "Complete all lessons in this module before taking the module final exam."}, status=403)
+
+        if quiz.is_final_exam and quiz.course_id and not quiz.section_id:
+            from enrollments.models import LessonProgress
+            required_lesson_ids = list(quiz.course.sections.values_list('lessons__id', flat=True))
+            if required_lesson_ids:
+                completed = LessonProgress.objects.filter(
+                    enrollment__student=request.user,
+                    enrollment__course=quiz.course,
+                    lesson_id__in=required_lesson_ids,
+                    is_completed=True,
+                ).values_list('lesson_id', flat=True)
+                if len(set(required_lesson_ids)) != len(set(completed)):
+                    return Response({"detail": "Complete all lessons across all modules before taking the course final exam."}, status=403)
+
         serializer = QuizSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -137,6 +167,24 @@ class QuizViewSet(viewsets.ModelViewSet):
         attempt.passed = score_percent >= quiz.passing_score_percent
         attempt.submitted_at = timezone.now()
         attempt.save()
+
+        if attempt.passed and quiz.is_final_exam and quiz.course_id and not quiz.section_id:
+            from enrollments.models import Enrollment
+            enrollment, _ = Enrollment.objects.get_or_create(student=request.user, course=quiz.course)
+            enrollment.progress_percent = 100
+            enrollment.completed_at = timezone.now()
+            enrollment.save()
+
+            certificate, _ = Certificate.objects.get_or_create(student=request.user, course=quiz.course)
+            certificate.verification_url = f"{settings.FRONTEND_BASE_URL}/verify-certificate/{certificate.certificate_number}"
+            if not certificate.pdf_file:
+                pdf_buffer = generate_certificate_pdf(certificate)
+                certificate.pdf_file.save(
+                    f"certificate_{certificate.certificate_number}.pdf",
+                    ContentFile(pdf_buffer.read()),
+                    save=True,
+                )
+            certificate.save()
 
         return Response(QuizAttemptResultSerializer(attempt).data)
 

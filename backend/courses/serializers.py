@@ -98,9 +98,10 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         model = Course
         fields = [
             'id', 'title', 'slug', 'subtitle', 'description', 'short_description', 'notes',
-            'notes_enabled', 'instructor', 'instructor_name', 'instructor_photo', 'category',
-            'category_name', 'level', 'status', 'thumbnail', 'price', 'is_free', 'language',
-            'duration_hours', 'sections', 'created_at',
+            'notes_enabled', 'learning_objectives', 'requirements', 'target_audience', 'tags',
+            'instructor', 'instructor_name', 'instructor_photo', 'category', 'category_name',
+            'level', 'status', 'thumbnail', 'price', 'is_free', 'language', 'duration_hours',
+            'sections', 'created_at',
         ]
 
     def get_thumbnail(self, obj):
@@ -125,6 +126,6 @@ class CourseWriteSerializer(serializers.ModelSerializer):
         model = Course
         fields = [
             'id', 'title', 'slug', 'subtitle', 'description', 'short_description', 'notes',
-            'notes_enabled', 'category', 'level', 'status', 'thumbnail', 'price', 'is_free',
-            'language', 'duration_hours',
+            'notes_enabled', 'learning_objectives', 'requirements', 'target_audience', 'tags',
+            'category', 'level', 'status', 'thumbnail', 'price', 'is_free', 'language', 'duration_hours',
         ]

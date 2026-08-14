@@ -5,7 +5,7 @@ import { BookOpen } from 'lucide-react';
 
 export function CourseCard({ course }: { course: any }) {
   return (
-    <Link href={`/courses/${course.slug}`} className="card" style={{ display: 'block', padding: 0, overflow: 'hidden' }}>
+    <Link href={`/courses/${course.slug}?id=${course.id}`} className="card" style={{ display: 'block', padding: 0, overflow: 'hidden' }}>
       <div style={{ height: 140, background: 'var(--surface-2)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {course.thumbnail ? (
           <Image src={course.thumbnail} alt={course.title} fill style={{ objectFit: 'cover' }} unoptimized />

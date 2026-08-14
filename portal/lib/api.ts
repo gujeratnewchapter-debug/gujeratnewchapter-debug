@@ -99,6 +99,7 @@ export const submitQuiz = (quizId: number, answers: any[]) =>
 
 // ---- Certificates ----
 export const getMyCertificates = () => apiClient.get('/certificates/');
+export const verifyCertificate = (certificateId: string) => apiClient.get(`/verify/${encodeURIComponent(certificateId)}/`);
 
 // ---- AI Tutor ----
 export const getConversations = () => apiClient.get('/ai/conversations/');

@@ -13,6 +13,9 @@ import {
 type LessonDraft = {
   localId: string;
   title: string;
+  description: string;
+  duration_minutes: number;
+  prerequisite: string;
   lesson_type: 'video' | 'pdf' | 'powerpoint' | 'text' | 'audio';
   video_url: string;
   source_url: string;
@@ -25,7 +28,8 @@ type LessonDraft = {
 
 function newLesson(): LessonDraft {
   return {
-    localId: crypto.randomUUID(), title: '', lesson_type: 'video', video_url: '', source_url: '',
+    localId: crypto.randomUUID(), title: '', description: '', duration_minutes: 15, prerequisite: '',
+    lesson_type: 'video', video_url: '', source_url: '',
     file: null, content_text: '', quizEnabled: false, passingScore: 80, questions: [],
   };
 }
@@ -51,7 +55,11 @@ export default function NewCoursePage() {
 
   const [form, setForm] = useState({
     title: '', subtitle: '', short_description: '', description: '', notes: '',
-    notes_enabled: false, category: '', level: 'beginner', price: '0', is_free: true, duration_hours: 1,
+    notes_enabled: false,
+    learning_objectives: '', learning_outcomes: '', target_audience: '', prerequisites: '',
+    skills_competencies: '', tags: '', category: '', subcategory: '', level: 'beginner', language: 'English',
+    instructor: '', co_instructors: '', estimated_duration: '1', workload: '', introduction_video: '', price: '0',
+    is_free: true, duration_hours: 1,
   });
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
@@ -92,12 +100,17 @@ export default function NewCoursePage() {
         description: form.description,
         notes: form.notes,
         notes_enabled: form.notes_enabled,
+        learning_objectives: form.learning_objectives,
+        requirements: form.prerequisites,
+        target_audience: form.target_audience,
+        tags: form.tags,
         category: form.category || null,
         level: form.level,
+        language: form.language || 'English',
         status: 'draft',
         price: form.price,
         is_free: form.is_free,
-        duration_hours: form.duration_hours,
+        duration_hours: Number(form.estimated_duration) || form.duration_hours,
       });
       let id = data.id;
 
@@ -230,21 +243,21 @@ export default function NewCoursePage() {
       {step === 'course' && (
         <form onSubmit={handleCreateCourse} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div>
-            <label className="label">Course thumbnail</label>
+            <label className="label">Course Thumbnail</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 100, height: 70, borderRadius: 8, background: 'var(--surface-2)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {thumbnailPreview ? <img src={thumbnailPreview} alt="thumbnail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Upload size={18} color="var(--text-muted)" />}
               </div>
               <label className="btn" style={{ cursor: 'pointer' }}>
-                Upload image
+                Upload thumbnail
                 <input type="file" accept="image/*" onChange={handleThumbnail} style={{ display: 'none' }} />
               </label>
             </div>
           </div>
 
           <div>
-            <label className="label">Course topic (title)</label>
-            <input required className="input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="e.g. Building Your MVP" />
+            <label className="label">Course topic</label>
+            <input required className="input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Entrepreneurship" />
           </div>
 
           <div>
@@ -253,7 +266,7 @@ export default function NewCoursePage() {
           </div>
 
           <div>
-            <label className="label">Short description (shown on course cards)</label>
+            <label className="label">Short description</label>
             <input className="input" value={form.short_description} onChange={(e) => setForm((f) => ({ ...f, short_description: e.target.value }))} />
           </div>
 
@@ -262,12 +275,70 @@ export default function NewCoursePage() {
             <RichTextEditor value={form.description} onChange={(html) => setForm((f) => ({ ...f, description: html }))} placeholder="Full course description..." />
           </div>
 
+          <div style={{ display: 'grid', gap: 14, marginTop: 8 }}>
+            <div>
+              <h3 style={{ margin: '8px 0 10px', fontSize: 18 }}>Learning Design</h3>
+            </div>
+
+            <div>
+              <label className="label">Learning Objectives</label>
+              <textarea className="input" rows={4} value={form.learning_objectives} onChange={(e) => setForm((f) => ({ ...f, learning_objectives: e.target.value }))} placeholder="Add one objective per line" />
+            </div>
+
+            <div>
+              <label className="label">Learning Outcomes</label>
+              <textarea className="input" rows={4} value={form.learning_outcomes} onChange={(e) => setForm((f) => ({ ...f, learning_outcomes: e.target.value }))} placeholder="What will learners be able to do after completing this course?" />
+            </div>
+
+            <div>
+              <label className="label">Target Audience</label>
+              <textarea className="input" rows={3} value={form.target_audience} onChange={(e) => setForm((f) => ({ ...f, target_audience: e.target.value }))} placeholder="Who is this course for?" />
+            </div>
+
+            <div>
+              <label className="label">Prerequisites</label>
+              <textarea className="input" rows={3} value={form.prerequisites} onChange={(e) => setForm((f) => ({ ...f, prerequisites: e.target.value }))} placeholder="Required knowledge, skills, or previous courses" />
+            </div>
+
+            <div>
+              <label className="label">Skills & Competencies</label>
+              <textarea className="input" rows={3} value={form.skills_competencies} onChange={(e) => setForm((f) => ({ ...f, skills_competencies: e.target.value }))} placeholder="Add skills or competencies" />
+            </div>
+
+            <div style={{ display: 'flex', gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label className="label">Course Subcategory</label>
+                <input className="input" value={form.subcategory} onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))} placeholder="e.g. AI Foundations" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="label">Course Tags</label>
+                <input className="input" value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} placeholder="startup, marketing, ai" />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label className="label">Estimated Course Duration</label>
+                <input className="input" type="number" min="1" value={form.estimated_duration} onChange={(e) => setForm((f) => ({ ...f, estimated_duration: e.target.value }))} placeholder="Hours" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="label">Estimated Learner Workload</label>
+                <input className="input" value={form.workload} onChange={(e) => setForm((f) => ({ ...f, workload: e.target.value }))} placeholder="e.g. 5–7 hrs/week" />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Course Introduction / Promotional Video</label>
+              <input className="input" value={form.introduction_video} onChange={(e) => setForm((f) => ({ ...f, introduction_video: e.target.value }))} placeholder="Video URL or embed link" />
+            </div>
+          </div>
+
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label className="label" style={{ marginBottom: 0 }}>Course notes</label>
+              <label className="label" style={{ marginBottom: 0 }}>Course Notes</label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.notes_enabled} onChange={(e) => setForm((f) => ({ ...f, notes_enabled: e.target.checked }))} />
-                Show as note card to students
+                Add Note Card
               </label>
             </div>
             <div style={{ marginTop: 8 }}>
@@ -291,6 +362,14 @@ export default function NewCoursePage() {
                 <option value="advanced">Advanced</option>
               </select>
             </div>
+            <div style={{ flex: 1 }}>
+              <label className="label">Language</label>
+              <select className="input" value={form.language} onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}>
+                <option value="English">English</option>
+                <option value="Amharic">Amharic</option>
+                <option value="French">French</option>
+              </select>
+            </div>
           </div>
 
           <div>
@@ -300,7 +379,10 @@ export default function NewCoursePage() {
                 {(user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase()}
               </div>
               <span style={{ fontSize: 14 }}>{user?.first_name} {user?.last_name}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>(edit photo/name from your Profile)</span>
+              <label className="btn" style={{ cursor: 'pointer', padding: '6px 10px', fontSize: 12 }}>
+                Upload Photo
+                <input type="file" accept="image/*" style={{ display: 'none' }} />
+              </label>
             </div>
           </div>
 
@@ -317,12 +399,17 @@ export default function NewCoursePage() {
             )}
           </div>
 
-          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Continue to Curriculum'}</button>
+          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Create Course'}</button>
         </form>
       )}
 
       {step === 'curriculum' && (
         <div>
+          <div style={{ marginBottom: 18 }}>
+            <h2 style={{ fontSize: 20, margin: 0 }}>Lessons (all optional)</h2>
+            <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: 14 }}>Leave blank to skip — you can add lessons later</p>
+          </div>
+
           {sections.map((section) => (
             <div key={section.localId} className="card" style={{ marginBottom: 20 }}>
               <input
@@ -332,6 +419,14 @@ export default function NewCoursePage() {
                 onChange={(e) => setSections((prev) => prev.map((s) => s.localId === section.localId ? { ...s, title: e.target.value } : s))}
                 placeholder="Topic / Module title"
               />
+
+              <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
+                <textarea className="input" rows={2} placeholder="Module description" />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input className="input" placeholder="Module duration (minutes)" style={{ width: 180 }} />
+                  <input className="input" placeholder="Module prerequisite" style={{ flex: 1 }} />
+                </div>
+              </div>
 
               {section.lessons.map((lesson, lIdx) => (
                 <div key={lesson.localId} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
@@ -349,6 +444,22 @@ export default function NewCoursePage() {
                     value={lesson.title} onChange={(e) => updateLessonField(section.localId, lesson.localId, { title: e.target.value })}
                   />
 
+                  <textarea
+                    className="input" rows={2} placeholder="Lesson description" style={{ marginBottom: 8 }}
+                    value={lesson.description} onChange={(e) => updateLessonField(section.localId, lesson.localId, { description: e.target.value })}
+                  />
+
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                    <input
+                      className="input" type="number" min="1" placeholder="Duration (min)" style={{ width: 150 }}
+                      value={lesson.duration_minutes} onChange={(e) => updateLessonField(section.localId, lesson.localId, { duration_minutes: Number(e.target.value) || 0 })}
+                    />
+                    <input
+                      className="input" placeholder="Lesson prerequisite" style={{ flex: 1 }}
+                      value={lesson.prerequisite} onChange={(e) => updateLessonField(section.localId, lesson.localId, { prerequisite: e.target.value })}
+                    />
+                  </div>
+
                   <select
                     className="input" style={{ marginBottom: 8 }}
                     value={lesson.lesson_type}
@@ -357,15 +468,21 @@ export default function NewCoursePage() {
                     <option value="video">Video</option>
                     <option value="text">Text</option>
                     <option value="pdf">PDF</option>
-                    <option value="powerpoint">Slides (PowerPoint)</option>
+                    <option value="powerpoint">Slide</option>
                     <option value="audio">Audio</option>
                   </select>
 
                   {lesson.lesson_type === 'video' && (
-                    <input
-                      className="input" placeholder="Video URL (YouTube/Vimeo) or paste upload URL" style={{ marginBottom: 8 }}
-                      value={lesson.video_url} onChange={(e) => updateLessonField(section.localId, lesson.localId, { video_url: e.target.value })}
-                    />
+                    <>
+                      <input
+                        className="input" placeholder="Video URL (YouTube/Vimeo) or paste upload URL" style={{ marginBottom: 8 }}
+                        value={lesson.video_url} onChange={(e) => updateLessonField(section.localId, lesson.localId, { video_url: e.target.value })}
+                      />
+                      <label className="btn" style={{ cursor: 'pointer', marginBottom: 8, display: 'inline-flex' }}>
+                        Upload video
+                        <input type="file" style={{ display: 'none' }} onChange={(e) => updateLessonField(section.localId, lesson.localId, { file: e.target.files?.[0] ?? null })} />
+                      </label>
+                    </>
                   )}
 
                   {['pdf', 'powerpoint', 'audio'].includes(lesson.lesson_type) && (
@@ -375,7 +492,7 @@ export default function NewCoursePage() {
                         value={lesson.source_url} onChange={(e) => updateLessonField(section.localId, lesson.localId, { source_url: e.target.value })}
                       />
                       <label className="btn" style={{ cursor: 'pointer', marginBottom: 8, display: 'inline-flex' }}>
-                        {lesson.file ? lesson.file.name : 'Or upload a file'}
+                        {lesson.file ? lesson.file.name : 'Upload file'}
                         <input type="file" style={{ display: 'none' }} onChange={(e) => updateLessonField(section.localId, lesson.localId, { file: e.target.files?.[0] ?? null })} />
                       </label>
                     </>
@@ -389,7 +506,7 @@ export default function NewCoursePage() {
 
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, margin: '10px 0' }}>
                     <input type="checkbox" checked={lesson.quizEnabled} onChange={(e) => updateLessonField(section.localId, lesson.localId, { quizEnabled: e.target.checked, questions: e.target.checked && lesson.questions.length === 0 ? [newQuestion()] : lesson.questions })} />
-                    Add a quiz students must pass to unlock the next lesson
+                    Lesson Quiz
                   </label>
 
                   {lesson.quizEnabled && (
@@ -429,7 +546,7 @@ export default function NewCoursePage() {
                         </div>
                       ))}
                       <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => addQuestion(section.localId, lesson.localId)}>
-                        <Plus size={12} /> Add question ({lesson.questions.length}/10 suggested)
+                        <Plus size={12} /> Add Question
                       </button>
                     </div>
                   )}
@@ -437,7 +554,7 @@ export default function NewCoursePage() {
               ))}
 
               <button type="button" className="btn" onClick={() => addLesson(section.localId)}>
-                <Plus size={14} /> Add another lesson to this topic
+                <Plus size={14} /> Add another lesson
               </button>
             </div>
           ))}
@@ -447,7 +564,7 @@ export default function NewCoursePage() {
           </button>
 
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleSaveCurriculum} disabled={saving}>
-            {saving ? 'Publishing...' : 'Save & Publish Course'}
+            {saving ? 'Publishing...' : 'Create Course'}
           </button>
         </div>
       )}
