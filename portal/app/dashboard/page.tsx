@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, Plus, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { getMyEnrollments, getCourses } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
   const [enrollments, setEnrollments] = useState<any[]>([]);
@@ -17,21 +17,31 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/');
-  }, [isLoading, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoading, isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    getMyEnrollments().then((res) => setEnrollments(res.data.results ?? res.data)).catch(() => {});
+    if (!isBackendAuthenticated) return;
+    getMyEnrollments().then((res) => setEnrollments(res.data.results ?? res.data)).catch((err) => { console.error('Failed to load enrollments:', err); });
     if (user?.role === 'instructor') {
       getCourses({ instructor: user.id }).then((res) => {
         setMyCourses(res.data.results ?? res.data);
-      }).catch(() => {});
+      }).catch((err) => { console.error('Failed to load instructor courses:', err); });
     } else if (user?.role === 'super_admin') {
       getCourses().then((res) => {
         setMyCourses(res.data.results ?? res.data);
-      }).catch(() => {});
+      }).catch((err) => { console.error('Failed to load courses:', err); });
     }
-  }, [isAuthenticated, user]);
+  }, [isBackendAuthenticated, user]);
+
+  const avgProgress = useMemo(
+    () => (enrollments.length ? enrollments.reduce((sum, item) => sum + (item.progress_percent ?? 0), 0) / enrollments.length : 0),
+    [enrollments],
+  );
+
+  const completedCourses = useMemo(
+    () => enrollments.filter((item) => (item.progress_percent ?? 0) >= 100).length,
+    [enrollments],
+  );
 
   if (isLoading || !isAuthenticated) return <div className="container section">Loading...</div>;
 
@@ -56,8 +66,12 @@ export default function DashboardPage() {
             <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{enrollments.length}</p>
           </div>
           <div className="card">
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Active modules</p>
-            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{enrollments.reduce((sum, e) => sum + (e.lessons_completed || 0), 0)}</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Avg. progress</p>
+            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{Math.round(avgProgress)}%</p>
+          </div>
+          <div className="card">
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Completed</p>
+            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{completedCourses}</p>
           </div>
           <div className="card">
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Your role</p>
@@ -66,10 +80,25 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <BrainCircuit size={18} color="var(--brand)" />
+          <h2 style={{ fontSize: 18, margin: 0 }}>AI learning companion</h2>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+          <button className="btn btn-primary" onClick={() => router.push('/ai-tutor')}>Ask the AI Tutor</button>
+          <button className="btn" onClick={() => router.push('/courses')}>Continue learning</button>
+          <button className="btn" onClick={() => router.push('/profile')}>View profile</button>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 18, marginBottom: 40 }}>
         {enrollments.map((e: any) => (
           <Link key={e.id} href={`/courses/${e.course_detail?.slug}`} className="card" style={{ display: 'block' }}>
-            <p style={{ fontWeight: 600, marginBottom: 6 }}>{e.course_detail?.title}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <p style={{ fontWeight: 600, margin: 0 }}>{e.course_detail?.title}</p>
+              <CheckCircle2 size={15} color="var(--brand)" />
+            </div>
             <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden', margin: '8px 0' }}>
               <div style={{ width: `${e.progress_percent}%`, height: '100%', background: 'var(--brand)' }} />
             </div>

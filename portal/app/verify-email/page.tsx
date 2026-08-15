@@ -19,7 +19,8 @@ export default function VerifyEmailPage() {
           return;
         }
         setStatus('error');
-      } catch {
+      } catch (err: any) {
+        console.error('Verify email check failed:', err);
         setStatus('error');
       }
     };

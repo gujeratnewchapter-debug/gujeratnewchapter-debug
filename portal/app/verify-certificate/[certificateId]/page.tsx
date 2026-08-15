@@ -17,7 +17,7 @@ export default function VerifyCertificatePage() {
         setData(res.data);
         setStatus(res.data.valid ? 'valid' : 'invalid');
       })
-      .catch(() => setStatus('invalid'));
+      .catch((err) => { console.error('Certificate verification failed:', err); setStatus('invalid'); });
   }, [certificateId]);
 
   if (status === 'loading') {

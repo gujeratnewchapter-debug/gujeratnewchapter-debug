@@ -34,7 +34,9 @@ export default function LessonPage() {
       const res = await getQuizzesForLesson(Number(lessonId));
       const qdata = res.data.results ?? res.data;
       if (qdata.length) setQuizId(qdata[0].id);
-    } catch {}
+    } catch (err) {
+      console.error('Failed to load quizzes for lesson', lessonId, err);
+    }
   }
 
   async function handleComplete() {

@@ -55,12 +55,13 @@ export function Navbar() {
               placeholder={t('searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              suppressHydrationWarning
             />
           </form>
 
           <div className="header-actions">
             <div className="relative">
-              <button className="btn lang-btn" onClick={() => setLangOpen((o) => !o)} type="button" aria-expanded={langOpen}>
+              <button className="btn lang-btn" onClick={() => setLangOpen((o) => !o)} type="button" aria-expanded={langOpen} suppressHydrationWarning>
                 {LANGUAGES.find((l) => l.code === lang)?.label} <ChevronDown size={14} />
               </button>
               {langOpen && (
@@ -81,7 +82,7 @@ export function Navbar() {
 
             {isAuthenticated ? (
               <div className="relative profile-menu-wrapper">
-                <button className="profile-button" type="button" onClick={() => setProfileOpen((o) => !o)}>
+                <button className="profile-button" type="button" onClick={() => setProfileOpen((o) => !o)} suppressHydrationWarning>
                   <div className="avatar">{(user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase()}</div>
                 </button>
                 {profileOpen && (

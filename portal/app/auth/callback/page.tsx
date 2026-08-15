@@ -15,9 +15,10 @@ export default function AuthCallbackPage() {
         if (error) throw error;
         setMessage('Sign-in complete. Redirecting...');
         router.push('/dashboard');
-      } catch {
-        setMessage('The sign-in could not be completed. Please try again.');
-        setTimeout(() => router.push('/'), 2000);
+      } catch (err: any) {
+        console.error('Auth callback error:', err);
+        setMessage(err?.message ? `Sign-in failed: ${err.message}` : 'The sign-in could not be completed. Please try again.');
+        setTimeout(() => router.push('/'), 4000);
       }
     };
 

@@ -43,7 +43,9 @@ export function CurriculumManager({ courseId, initialSections }: { courseId: num
               })),
             };
           }
-        } catch {}
+        } catch (err) {
+          console.error('Failed to load quiz for lesson', l.id, err);
+        }
         lessons.push({
           id: fullLesson.id, title: fullLesson.title, lesson_type: fullLesson.lesson_type, order: fullLesson.order,
           video_url: fullLesson.video_url || '', content_text: fullLesson.content_text || '', quiz,

@@ -62,9 +62,9 @@ export default function HomePage() {
         const all = res.data.results ?? res.data;
         setCourses(all.slice(0, 6));
         setCourseCount(res.data.count ?? all.length);
-      }).catch(() => {});
-      getCategories().then((res) => setCategories(res.data.results ?? res.data)).catch(() => {});
-      getSiteSettings().then((res) => setHeroSettings(res.data)).catch(() => {});
+      }).catch((err) => { console.error('Failed to load courses:', err); });
+      getCategories().then((res) => setCategories(res.data.results ?? res.data)).catch((err) => { console.error('Failed to load categories:', err); });
+      getSiteSettings().then((res) => setHeroSettings(res.data)).catch((err) => { console.error('Failed to load site settings:', err); });
     };
 
     loadSiteContent();

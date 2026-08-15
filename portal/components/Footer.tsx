@@ -60,7 +60,9 @@ export function Footer() {
       const nextSettings = res.data as Settings;
       setSettings(nextSettings);
       setSocialLinks(nextSettings.social_links ?? []);
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('Failed to load site settings:', err);
+    });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -70,7 +72,8 @@ export function Footer() {
     try {
       await apiClient.post('/contact/', form);
       setSent(true);
-    } catch {
+    } catch (err) {
+      console.error('Footer contact submit failed:', err);
       setError('Could not send your message right now — please try again.');
     } finally {
       setSending(false);

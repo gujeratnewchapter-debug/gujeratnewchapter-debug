@@ -34,24 +34,44 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False, allow_blank=True)
+    full_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'role']
+        fields = ['id', 'username', 'email', 'password', 'full_name', 'first_name', 'last_name', 'role']
         read_only_fields = ['id']
 
     def validate(self, attrs):
-        email = attrs.get('email', '')
-        username = attrs.get('username', '')
+        email = (attrs.get('email') or '').strip()
+        if email:
+            attrs['email'] = email.lower()
+
+        full_name = (attrs.get('full_name') or '').strip()
+        first_name = (attrs.get('first_name') or '').strip()
+        last_name = (attrs.get('last_name') or '').strip()
+
+        if full_name and not first_name and not last_name:
+            parts = full_name.split()
+            if parts:
+                attrs['first_name'] = parts[0]
+                attrs['last_name'] = ' '.join(parts[1:])
+        elif full_name:
+            if not first_name:
+                attrs['first_name'] = full_name.split()[0]
+            if not last_name:
+                attrs['last_name'] = ' '.join(full_name.split()[1:])
+
+        username = (attrs.get('username') or '').strip()
         if not username and email:
-            base = email.split('@')[0]
+            base = email.split('@')[0].lower()
             candidate = base
             index = 1
             while User.objects.filter(username=candidate).exists():
                 index += 1
                 candidate = f"{base}{index}"
             attrs['username'] = candidate
+
         return super().validate(attrs)
 
     def validate_role(self, value):
@@ -62,6 +82,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+        validated_data.pop('full_name', None)
         user = User(**validated_data)
         user.set_password(password)
         user.save()

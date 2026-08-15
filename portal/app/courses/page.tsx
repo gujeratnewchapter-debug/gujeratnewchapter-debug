@@ -17,7 +17,7 @@ function CoursesInner() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getCategories().then((res) => setCategories(res.data.results ?? res.data)).catch(() => {});
+    getCategories().then((res) => setCategories(res.data.results ?? res.data)).catch((err) => { console.error('Failed to load categories:', err); });
   }, []);
 
   useEffect(() => {

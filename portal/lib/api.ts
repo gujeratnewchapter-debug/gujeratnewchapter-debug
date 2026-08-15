@@ -1,21 +1,22 @@
 import axios from 'axios';
 import { supabase } from './supabase';
+import { getStoredDjangoAccessToken, isUsableJwtToken } from './auth-token';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
 
-export async function getSupabaseAccessToken(): Promise<string | null> {
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error) return null;
-  return session?.access_token ?? null;
-}
-
 apiClient.interceptors.request.use(async (config) => {
-  const accessToken = await getSupabaseAccessToken();
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+  const djangoToken = getStoredDjangoAccessToken();
+  const headers = config.headers ?? {};
+
+  if (djangoToken && isUsableJwtToken(djangoToken)) {
+    (headers as Record<string, string>).Authorization = `Bearer ${djangoToken}`;
+  } else {
+    delete (headers as Record<string, string>).Authorization;
   }
+
+  config.headers = headers;
   return config;
 });
 
@@ -23,17 +24,19 @@ apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    const status = error.response?.status;
+
+    if ((status === 401 || status === 403) && !original._retry) {
       original._retry = true;
-      try {
-        const refreshed = await supabase.auth.refreshSession();
-        if (refreshed.data.session?.access_token) {
-          original.headers.Authorization = `Bearer ${refreshed.data.session.access_token}`;
-          return apiClient(original);
-        }
-      } catch {
-        await supabase.auth.signOut();
+
+      const djangoToken = getStoredDjangoAccessToken();
+      if (!djangoToken || !isUsableJwtToken(djangoToken)) {
+        clearDjangoAuthToken();
+      } else {
+        clearDjangoAuthToken();
       }
+
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   }
@@ -41,8 +44,9 @@ apiClient.interceptors.response.use(
 
 // ---- Auth ----
 export const register = (payload: {
-  username: string; email: string; password: string;
-  first_name: string; last_name: string; role: 'student' | 'instructor';
+  username?: string; email: string; password: string;
+  first_name?: string; last_name?: string; full_name?: string;
+  role: 'student' | 'instructor';
 }) => apiClient.post('/auth/register/', payload);
 
 export const login = (username: string, password: string) =>
@@ -50,6 +54,22 @@ export const login = (username: string, password: string) =>
 
 export const googleLogin = (id_token: string, role: 'student' | 'instructor' = 'student') =>
   apiClient.post('/auth/login/google/', { id_token, role });
+
+export function setDjangoAuthToken(accessToken: string | null) {
+  if (accessToken) {
+    try {
+      localStorage.setItem('django_access', accessToken);
+    } catch (e) {
+      /* ignore */
+    }
+  } else {
+    try { localStorage.removeItem('django_access'); } catch (e) { /* ignore */ }
+  }
+}
+
+export function clearDjangoAuthToken() {
+  try { localStorage.removeItem('django_access'); localStorage.removeItem('django_refresh'); } catch (e) { /* ignore */ }
+}
 
 export const verifyEmail = (token: string) => apiClient.post('/auth/verify-email/', { token });
 export const resendVerification = () => apiClient.post('/auth/resend-verification/');
