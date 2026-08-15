@@ -33,8 +33,8 @@ export function Navbar() {
 
   return (
     <>
-      <header className="site-header" suppressHydrationWarning>
-        <div className="container header-inner">
+      <header className="site-header" suppressHydrationWarning data-testid="site-header">
+        <div className="container header-inner" suppressHydrationWarning>
           <Link href="/" className="brand-link">
             <Lightbulb size={22} color="var(--accent)" fill="var(--accent)" />
             Ethiopian Startup School
@@ -81,12 +81,12 @@ export function Navbar() {
             </div>
 
             {isAuthenticated ? (
-              <div className="relative profile-menu-wrapper">
+              <div className="relative profile-menu-wrapper" suppressHydrationWarning>
                 <button className="profile-button" type="button" onClick={() => setProfileOpen((o) => !o)} suppressHydrationWarning>
-                  <div className="avatar">{(user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase()}</div>
+                  <div className="avatar" suppressHydrationWarning>{(user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase()}</div>
                 </button>
                 {profileOpen && (
-                  <div className="card profile-menu">
+                  <div className="card profile-menu" suppressHydrationWarning>
                     <Link href="/dashboard" className="menu-link">{t('dashboard')}</Link>
                     <Link href="/profile" className="menu-link">{t('profile')}</Link>
                     <button type="button" className="menu-link" onClick={() => { signOut(); router.push('/'); closeAllMenus(); }}>

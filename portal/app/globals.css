@@ -264,7 +264,7 @@ button, input, textarea, select {
   right: 0;
   top: 42px;
   min-width: 160px;
-  z-index: 50;
+  z-index: 1000;
 }
 
 .lang-menu button,
@@ -318,7 +318,7 @@ button, input, textarea, select {
   right: 0;
   top: 46px;
   min-width: 180px;
-  z-index: 50;
+  z-index: 1000;
 }
 
 .mobile-menu-button {

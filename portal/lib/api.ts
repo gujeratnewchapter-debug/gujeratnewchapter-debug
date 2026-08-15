@@ -26,18 +26,21 @@ apiClient.interceptors.response.use(
     const original = error.config;
     const status = error.response?.status;
 
-    if ((status === 401 || status === 403) && !original._retry) {
+    if (status === 401 && !original._retry) {
       original._retry = true;
+      clearDjangoAuthToken();
+      return Promise.reject(error);
+    }
 
+    if (status === 403) {
+      // 403 Forbidden may mean either unauthenticated or lacks permission.
+      // Only clear token if we detect it's actually invalid.
       const djangoToken = getStoredDjangoAccessToken();
       if (!djangoToken || !isUsableJwtToken(djangoToken)) {
         clearDjangoAuthToken();
-      } else {
-        clearDjangoAuthToken();
       }
-
-      return Promise.reject(error);
     }
+
     return Promise.reject(error);
   }
 );
