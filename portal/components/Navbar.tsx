@@ -87,9 +87,30 @@ export function Navbar() {
                 </button>
                 {profileOpen && (
                   <div className="card profile-menu" suppressHydrationWarning>
-                    <Link href="/dashboard" className="menu-link">{t('dashboard')}</Link>
-                    <Link href="/profile" className="menu-link">{t('profile')}</Link>
-                    <button type="button" className="menu-link" onClick={() => { signOut(); router.push('/'); closeAllMenus(); }}>
+                    <Link 
+                      href="/dashboard" 
+                      className="menu-link" 
+                      onClick={() => { setProfileOpen(false); }}
+                    >
+                      {t('dashboard')}
+                    </Link>
+                    <Link 
+                      href="/profile" 
+                      className="menu-link" 
+                      onClick={() => { setProfileOpen(false); }}
+                    >
+                      {t('profile')}
+                    </Link>
+                    <button 
+                      type="button" 
+                      className="menu-link" 
+                      onClick={() => { 
+                        signOut(); 
+                        setProfileOpen(false);
+                        closeAllMenus(); 
+                        router.push('/'); 
+                      }}
+                    >
                       {t('logOut')}
                     </button>
                   </div>

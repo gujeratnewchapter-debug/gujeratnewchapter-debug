@@ -139,7 +139,7 @@ button, input, textarea, select {
   top: 0;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(18px);
-  z-index: 40;
+  z-index: 9999;
   box-shadow: 0 10px 30px rgba(17, 38, 59, 0.06);
 }
 
@@ -264,7 +264,8 @@ button, input, textarea, select {
   right: 0;
   top: 42px;
   min-width: 160px;
-  z-index: 1000;
+  z-index: 10001;
+  pointer-events: auto;
 }
 
 .lang-menu button,
@@ -292,6 +293,7 @@ button, input, textarea, select {
 
 .profile-menu-wrapper {
   position: relative;
+  z-index: 10000;
 }
 
 .profile-button {
@@ -299,6 +301,8 @@ button, input, textarea, select {
   border: none;
   background: transparent;
   cursor: pointer;
+  z-index: 10000;
+  position: relative;
 }
 
 .avatar {
@@ -311,6 +315,7 @@ button, input, textarea, select {
   justify-content: center;
   font-size: 14px;
   font-weight: 700;
+  z-index: 10000;
 }
 
 .profile-menu {
@@ -318,7 +323,8 @@ button, input, textarea, select {
   right: 0;
   top: 46px;
   min-width: 180px;
-  z-index: 1000;
+  z-index: 10001;
+  pointer-events: auto;
 }
 
 .mobile-menu-button {
@@ -333,7 +339,7 @@ button, input, textarea, select {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 39;
+  z-index: 9998;
 }
 
 .mobile-nav {
