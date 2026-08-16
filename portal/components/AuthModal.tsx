@@ -8,12 +8,21 @@ import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
-export function AuthModal({ onClose }: { onClose: () => void }) {
+export function AuthModal({
+  onClose,
+  initialTab = 'signin',
+  initialReturnTo = null,
+}: {
+  onClose: () => void;
+  initialTab?: 'signin' | 'signup';
+  initialReturnTo?: string | null;
+}) {
   const router = useRouter();
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const { t } = useI18n();
   const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-  const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+  const [tab, setTab] = useState<'signin' | 'signup'>(initialTab);
+  const [returnTo, setReturnTo] = useState<string | null>(initialReturnTo);
   const [role, setRole] = useState<'student' | 'instructor'>('student');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -28,6 +37,11 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     full_name: '', email: '', password: '', confirm_password: '',
   });
 
+  React.useEffect(() => {
+    setTab(initialTab);
+    setReturnTo(initialReturnTo);
+  }, [initialTab, initialReturnTo]);
+
   function handleClose() {
     setError('');
     setSuccess('');
@@ -38,7 +52,14 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     setForgotPasswordEmail('');
     setSignInForm({ email: '', password: '' });
     setSignUpForm({ full_name: '', email: '', password: '', confirm_password: '' });
+    setReturnTo(null);
     onClose();
+  }
+
+  function routeAfterAuth() {
+    const target = returnTo || '/courses';
+    handleClose();
+    setTimeout(() => router.push(target), 120);
   }
 
   async function handleSignIn(e: React.FormEvent) {
@@ -49,8 +70,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     try {
       await signIn(signInForm.email.trim(), signInForm.password);
       setSignInForm({ email: '', password: '' });
-      handleClose();
-      setTimeout(() => router.push('/courses'), 120);
+      routeAfterAuth();
     } catch (err: any) {
       setError(err?.message || 'Invalid email or password.');
     } finally {
@@ -79,6 +99,12 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
       setSignInForm({ email: '', password: '' });
       setSignUpForm({ full_name: '', email: '', password: '', confirm_password: '' });
       setTab('signin');
+      if (returnTo) {
+        setTimeout(() => {
+          setError('');
+          setSuccess('Your account is ready. Please sign in to continue your lesson.');
+        }, 50);
+      }
     } catch (err: any) {
       const msg = err?.message || '';
       setError(msg || 'Registration failed. Please try again.');
@@ -117,8 +143,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     try {
       // Exchange the Google ID token with Supabase for direct sign-in
       await signInWithGoogle(credential);
-      handleClose();
-      setTimeout(() => router.push('/courses'), 120);
+      routeAfterAuth();
     } catch (err: any) {
       setError(err?.message || 'Google sign-in failed.');
     } finally {
@@ -151,9 +176,9 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       onClick={handleClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
     >
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: 440, maxWidth: '100%', position: 'relative' }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: 440, maxWidth: '100%', position: 'relative', zIndex: 200001 }}>
         <button onClick={handleClose} style={{ position: 'absolute', top: 14, right: 14, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
           <X size={18} />
         </button>

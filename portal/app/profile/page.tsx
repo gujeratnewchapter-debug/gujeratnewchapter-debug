@@ -25,8 +25,8 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.push('/');
-  }, [isLoading, isAuthenticated]);
+    if (!isLoading && !isBackendAuthenticated) router.push('/');
+  }, [isLoading, isBackendAuthenticated]);
 
   useEffect(() => {
     if (!isBackendAuthenticated) return;
@@ -96,7 +96,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (isLoading || !isAuthenticated) return <div className="container section">Loading...</div>;
+  if (isLoading || !isBackendAuthenticated) return <div className="container section">Loading...</div>;
 
   return (
     <div className="container section" style={{ maxWidth: 980 }}>
@@ -266,7 +266,7 @@ export default function ProfilePage() {
 
       <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <button className="btn" onClick={() => router.push('/dashboard')}>Back to dashboard</button>
-        <button className="btn" onClick={() => { signOut(); router.push('/'); }}>{t('logOut')}</button>
+        <button className="btn" onClick={async () => { await signOut(); router.push('/'); router.refresh(); }}>{t('logOut')}</button>
       </div>
     </div>
   );

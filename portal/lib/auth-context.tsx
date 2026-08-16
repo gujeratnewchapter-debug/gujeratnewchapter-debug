@@ -69,11 +69,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [tokenRefresh, setTokenRefresh] = useState(0); // Force re-render when token changes
   const [supabaseSessionAvailable, setSupabaseSessionAvailable] = useState(false);
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
 
   // Recalculate hasValidDjangoSession whenever tokenRefresh changes (triggered by setDjangoAuthToken)
   const djangoAccessToken = getStoredDjangoAccessToken();
   const hasValidDjangoSession = !!djangoAccessToken && isUsableJwtToken(djangoAccessToken);
-  const isAuthenticated = hasValidDjangoSession || Boolean(user?.email) || supabaseSessionAvailable;
+  const isAuthenticated = hasHydrated ? (hasValidDjangoSession || Boolean(user?.email) || supabaseSessionAvailable) : false;
 
   useEffect(() => {
     let mounted = true;
@@ -169,15 +174,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (isCredentialFailure) {
           try {
-            console.log('Supabase error detected, falling back to backend login...');
             const backendRes = await api.login(normalizedEmail, password);
             const accessToken = backendRes?.data?.access;
 
             if (accessToken) {
-              console.log('Backend login successful, storing token and fetching profile...');
               setDjangoAuthToken(accessToken);
               const { data: profile } = await api.getMe();
-              console.log('Profile fetched successfully:', profile);
               setUser(profile as User);
               setTokenRefresh(prev => prev + 1); // Trigger re-render to update hasValidDjangoSession
               return;
@@ -185,7 +187,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               throw new Error('No access token returned from backend login');
             }
           } catch (backendErr: any) {
-            console.error('Backend login fallback failed:', backendErr);
             const backendMsg = backendErr?.response?.data?.detail || backendErr?.message || 'Backend login failed';
             throw new Error(`Authentication failed: ${backendMsg}`);
           }
@@ -206,7 +207,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
       } catch (backendErr: any) {
-        console.warn('Supabase login succeeded but backend session sync failed; continuing with Supabase session only:', backendErr);
+        console.error('Supabase login succeeded but backend session sync failed:', backendErr);
+        const backendMsg = backendErr?.response?.data?.detail || backendErr?.message || 'Backend session sync failed.';
+        throw new Error(`Authentication failed: ${backendMsg}`);
       }
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -222,74 +225,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signInWithGoogle(idToken?: string) {
-    // If the app obtained a Google ID token (from Google Identity Services),
-    // exchange it with Supabase via signInWithIdToken for a direct sign-in (no redirect).
+    const isProviderDisabledError = (err: any) => {
+      const msg = (err?.message || err?.error_description || String(err || '')).toLowerCase();
+      return msg.includes('unsupported provider') || msg.includes('provider is not enabled') || msg.includes('google provider') && msg.includes('not enabled');
+    };
+
     try {
       if (idToken) {
-        try {
-          const { data, error } = await (supabase as any).auth.signInWithIdToken({ provider: 'google', token: idToken });
-          if (!error && data) {
-            try {
-              const resp = await api.googleLogin(idToken);
-              const access = resp.data?.access;
-              if (access) {
-                setDjangoAuthToken(access);
-                setSupabaseSessionAvailable(true);
-                try {
-                  const { data: profile } = await api.getMe();
-                  setUser(profile as any);
-                  setTokenRefresh(prev => prev + 1);
-                  return;
-                } catch (pfErr) {
-                  console.warn('Failed to fetch profile after backend google login:', pfErr);
-                }
-              }
-            } catch (backendErr) {
-              console.warn('Backend Google login failed, continuing with Supabase session only:', backendErr);
-            }
-
-            const nextUser = normalizeSupabaseUser(data?.user ?? null);
-            setUser(nextUser);
-            setSupabaseSessionAvailable(true);
-            return;
-          }
-        } catch (e) {
-          console.warn('Supabase ID token sign-in failed, falling back to backend exchange:', e);
-        }
-
-        // Fallback: exchange the Google ID token with our Django backend which will
-        // verify the token server-side and return a JWT (access/refresh). We then
-        // set the Django access token on the API client so subsequent requests work.
         try {
           const resp = await api.googleLogin(idToken);
           const access = resp.data?.access;
           if (access) {
             setDjangoAuthToken(access);
             setSupabaseSessionAvailable(true);
-            // fetch profile from backend
             try {
               const { data: profile } = await api.getMe();
               setUser(profile as any);
-              setTokenRefresh(prev => prev + 1); // Trigger re-render to update hasValidDjangoSession
+              setTokenRefresh(prev => prev + 1);
+              return;
             } catch (pfErr) {
-              console.warn('Failed to fetch profile after backend google login:', pfErr);
+              console.error('Failed to fetch profile after backend google login:', pfErr);
+              throw pfErr;
             }
-            return;
           }
-        } catch (be) {
-          console.error('Backend googleLogin failed:', be);
-          throw be;
+        } catch (backendErr) {
+          console.warn('Backend Google login failed; trying Supabase only if the provider is enabled:', backendErr);
+
+          try {
+            const { data, error } = await (supabase as any).auth.signInWithIdToken({ provider: 'google', token: idToken });
+            if (!error && data) {
+              const nextUser = normalizeSupabaseUser(data?.user ?? null);
+              setUser(nextUser);
+              setSupabaseSessionAvailable(true);
+              return;
+            }
+
+            if (error && isProviderDisabledError(error)) {
+              throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
+            }
+
+            if (error) throw error;
+          } catch (supabaseErr) {
+            if (isProviderDisabledError(supabaseErr)) {
+              throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
+            }
+            throw supabaseErr;
+          }
         }
       }
 
       // Fallback: redirect-based OAuth via Supabase
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (error) {
+          if (isProviderDisabledError(error)) {
+            throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
+          }
+          throw error;
+        }
+      } catch (err) {
+        if (isProviderDisabledError(err)) {
+          throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
+        }
+        throw err;
+      }
     } catch (err) {
       throw err;
     }
@@ -366,14 +370,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
-    // Sign out from Supabase (if used) and clear any Django tokens we set.
+    // Sign out from Supabase (if used) and clear any persisted Django tokens we set.
     try {
       const { error } = await supabase.auth.signOut();
       if (error) console.warn('Supabase signOut returned error:', error);
     } catch (e) {
       console.warn('Error signing out from Supabase:', e);
     }
-    try { clearDjangoAuthToken(); } catch (e) { /* ignore */ }
+
+    try {
+      clearDjangoAuthToken();
+      const keysToRemove = Object.keys(localStorage).filter((key) =>
+        key.startsWith('sb-') && (key.includes('-auth-token') || key.includes('-auth-token-code-verifier'))
+      );
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+    } catch (e) {
+      console.warn('Error clearing persisted auth data:', e);
+    }
+
     setSupabaseSessionAvailable(false);
     setUser(null);
     setTokenRefresh(prev => prev + 1); // Trigger re-render to update hasValidDjangoSession
@@ -389,8 +403,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoading,
-        isAuthenticated,
-        isBackendAuthenticated: hasValidDjangoSession,
+        isAuthenticated: hasHydrated ? isAuthenticated : false,
+        isBackendAuthenticated: hasHydrated ? hasValidDjangoSession : false,
         signIn,
         signInWithGoogle,
         signUp,

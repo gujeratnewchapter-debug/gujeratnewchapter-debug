@@ -14,68 +14,130 @@ const ICONS: Record<string, any> = {
 
 export default function CourseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isBackendAuthenticated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [course, setCourse] = useState<any>(null);
   const [enrollment, setEnrollment] = useState<any>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [courseError, setCourseError] = useState<string | null>(null);
 
   useEffect(() => {
-    load();
-  }, [slug, isAuthenticated]);
+    setLoading(true);
+    setCourseError(null);
+    setEnrollment(null);
+    void load();
+  }, [slug, isAuthenticated, isBackendAuthenticated]);
 
   async function load() {
-    const idParam = searchParams?.get('id');
-    if (idParam) {
-      try {
-        const { data: detail } = await getCourse(idParam);
-        setCourse(detail);
-        if (isAuthenticated) {
+    try {
+      const idParam = searchParams?.get('id');
+      if (idParam) {
+        try {
+          const { data: detail } = await getCourse(idParam);
+          setCourse(detail);
+          if (isBackendAuthenticated) {
+            try {
+              const my = await getMyEnrollments();
+              const existing = (my.data.results ?? my.data).find((e: any) => e.course === detail.id);
+              setEnrollment(existing ?? null);
+            } catch (enrollmentErr) {
+              console.warn('Failed to fetch enrollment for course detail page:', enrollmentErr);
+              setEnrollment(null);
+            }
+          }
+          return;
+        } catch (err) {
+          console.warn('Failed to load course by id, trying search fallback:', err);
+        }
+      }
+
+      const { data } = await getCourses({ search: slug });
+      const list = data.results ?? data;
+      const match = list.find((c: any) => c.slug === slug) ?? list[0];
+      if (!match) {
+        setCourse(null);
+        setCourseError('This course is not available right now.');
+        return;
+      }
+
+      const { data: detail } = await getCourse(match.id);
+      setCourse(detail);
+
+      if (isBackendAuthenticated) {
+        try {
           const my = await getMyEnrollments();
           const existing = (my.data.results ?? my.data).find((e: any) => e.course === detail.id);
           setEnrollment(existing ?? null);
+        } catch (enrollmentErr) {
+          console.warn('Failed to fetch enrollment for course detail page:', enrollmentErr);
+          setEnrollment(null);
         }
-        return;
-      } catch (err) {
-        // fall back to search-based lookup below
       }
-    }
-
-    const { data } = await getCourses({ search: slug });
-    const list = data.results ?? data;
-    const match = list.find((c: any) => c.slug === slug) ?? list[0];
-    if (!match) {
+    } catch (err) {
+      console.error('Failed to load course detail page:', err);
       setCourse(null);
-      return;
-    }
-
-    const { data: detail } = await getCourse(match.id);
-    setCourse(detail);
-
-    if (isAuthenticated) {
-      const my = await getMyEnrollments();
-      const existing = (my.data.results ?? my.data).find((e: any) => e.course === detail.id);
-      setEnrollment(existing ?? null);
+      setCourseError('Unable to load this course right now. Please try again in a moment.');
+    } finally {
+      setLoading(false);
     }
   }
 
+  function getLessonRedirectUrl(targetCourse: any) {
+    const allLessons = targetCourse?.sections?.flatMap((section: any) => section.lessons ?? []) ?? [];
+    const nextLesson = allLessons.find((lesson: any) => lesson && lesson.id != null && (lesson.is_unlocked !== false || lesson.is_preview)) ?? allLessons[0];
+    const targetSlug = targetCourse?.slug || slug;
+
+    if (nextLesson?.id) {
+      return `/courses/${targetSlug}/lessons/${nextLesson.id}`;
+    }
+
+    return `/courses/${targetSlug}`;
+  }
+
   async function handleEnroll() {
-    if (!isAuthenticated) {
-      router.push('/');
+    if (!course) return;
+
+    const targetSlug = course.slug || slug;
+
+    if (!isBackendAuthenticated) {
+      const authReturnTo = getLessonRedirectUrl(course);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('open-auth-modal', {
+          detail: { tab: 'signup', returnTo: authReturnTo },
+        }));
+      }
       return;
     }
-    if (!course) return;
+
     setEnrolling(true);
     try {
       const { data } = await enroll(course.id);
       setEnrollment(data);
+      router.push(getLessonRedirectUrl(course));
+    } catch (err) {
+      console.error('Failed to enroll in course:', err);
+      router.push(getLessonRedirectUrl(course));
     } finally {
       setEnrolling(false);
     }
   }
 
-  if (!course) return <div className="container section">Loading...</div>;
+  if (loading) return <div className="container section">Loading...</div>;
+
+  if (courseError || !course) {
+    return (
+      <div className="container section">
+        <div className="card" style={{ maxWidth: 560, margin: '40px auto', padding: 28 }}>
+          <p style={{ fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: 'var(--brand)', marginBottom: 10 }}>Course unavailable</p>
+          <h1 style={{ fontSize: 28, marginBottom: 10 }}>We couldn’t load this course</h1>
+          <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>{courseError || 'This course could not be found.'}</p>
+          <button className="btn btn-primary" onClick={() => router.push('/courses')}>Browse courses</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container section">
@@ -140,7 +202,15 @@ export default function CourseDetailPage() {
             {enrollment ? (
               <>
                 <p style={{ fontSize: 13, color: 'var(--brand)', marginBottom: 10 }}>✓ You're enrolled — {enrollment.progress_percent}% complete</p>
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => router.push(`/ai-tutor?course=${course.id}`)}>
+                <button className="btn btn-primary" style={{ width: '100%', marginBottom: 10 }} onClick={() => {
+                  const allLessons = course.sections?.flatMap((section: any) => section.lessons ?? []) ?? [];
+                  const firstAvailable = allLessons.find((lesson: any) => lesson && lesson.is_unlocked !== false) ?? allLessons[0];
+                  if (firstAvailable?.id) router.push(`/courses/${slug}/lessons/${firstAvailable.id}`);
+                  else router.push(`/courses/${slug}`);
+                }}>
+                  Continue learning
+                </button>
+                <button className="btn" style={{ width: '100%' }} onClick={() => router.push(`/ai-tutor?course=${course.id}`)}>
                   Ask the AI Tutor about this course
                 </button>
               </>

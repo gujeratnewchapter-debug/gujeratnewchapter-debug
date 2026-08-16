@@ -68,13 +68,6 @@ export default function HomePage() {
     };
 
     loadSiteContent();
-    const contentInterval = window.setInterval(loadSiteContent, 5000);
-    window.addEventListener('focus', loadSiteContent);
-
-    return () => {
-      window.clearInterval(contentInterval);
-      window.removeEventListener('focus', loadSiteContent);
-    };
   }, []);
 
   function handleSearch(e: React.FormEvent) {

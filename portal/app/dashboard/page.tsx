@@ -16,8 +16,8 @@ export default function DashboardPage() {
   const [myCourses, setMyCourses] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.push('/');
-  }, [isLoading, isAuthenticated]);
+    if (!isLoading && !isBackendAuthenticated) router.push('/');
+  }, [isLoading, isBackendAuthenticated]);
 
   useEffect(() => {
     if (!isBackendAuthenticated) return;
@@ -43,7 +43,7 @@ export default function DashboardPage() {
     [enrollments],
   );
 
-  if (isLoading || !isAuthenticated) return <div className="container section">Loading...</div>;
+  if (isLoading || !isBackendAuthenticated) return <div className="container section">Loading...</div>;
 
   return (
     <div className="container section">

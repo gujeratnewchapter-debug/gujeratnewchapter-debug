@@ -139,7 +139,7 @@ button, input, textarea, select {
   top: 0;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(18px);
-  z-index: 9999;
+  z-index: 10060;
   box-shadow: 0 10px 30px rgba(17, 38, 59, 0.06);
 }
 
@@ -243,6 +243,8 @@ button, input, textarea, select {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  position: relative;
+  z-index: 10090;
 }
 
 .lang-btn {
@@ -257,6 +259,8 @@ button, input, textarea, select {
   border-radius: 12px;
   padding: 8px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  position: relative;
+  z-index: 10100;
 }
 
 .lang-menu {
@@ -264,7 +268,7 @@ button, input, textarea, select {
   right: 0;
   top: 42px;
   min-width: 160px;
-  z-index: 10001;
+  z-index: 10110;
   pointer-events: auto;
 }
 
@@ -293,7 +297,7 @@ button, input, textarea, select {
 
 .profile-menu-wrapper {
   position: relative;
-  z-index: 10000;
+  z-index: 10120;
 }
 
 .profile-button {
@@ -301,7 +305,7 @@ button, input, textarea, select {
   border: none;
   background: transparent;
   cursor: pointer;
-  z-index: 10000;
+  z-index: 10130;
   position: relative;
 }
 
@@ -323,7 +327,7 @@ button, input, textarea, select {
   right: 0;
   top: 46px;
   min-width: 180px;
-  z-index: 10001;
+  z-index: 10140;
   pointer-events: auto;
 }
 
@@ -339,7 +343,7 @@ button, input, textarea, select {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 9998;
+  z-index: 10020;
 }
 
 .mobile-nav {
@@ -350,7 +354,7 @@ button, input, textarea, select {
   background: var(--bg);
   border-top: 1px solid var(--border);
   padding: 18px 24px 24px;
-  z-index: 40;
+  z-index: 10045;
 }
 
 .mobile-search {
@@ -534,7 +538,7 @@ textarea:focus {
   min-height: 420px;
   color: #ffffff;
   background: linear-gradient(180deg, rgba(15,118,110,1) 0%, rgba(240,253,248,1) 100%);
-  z-index: 1;
+  z-index: 0;
 }
 .hero-section::before {
   content: '';
@@ -592,7 +596,8 @@ textarea:focus {
 
 .app-shell {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  isolation: isolate;
 }
 
 .global-tech-visuals {
@@ -877,7 +882,8 @@ textarea:focus {
 
 .app-shell {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  isolation: isolate;
 }
 
 .app-shell::before {
@@ -894,6 +900,14 @@ textarea:focus {
 .app-shell > * {
   position: relative;
   z-index: 1;
+}
+
+.site-header,
+.profile-menu,
+.lang-menu,
+.mobile-nav,
+.mobile-nav-overlay {
+  z-index: 100000;
 }
 
 .global-tech-visuals {

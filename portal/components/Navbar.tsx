@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Lightbulb, ChevronDown, Search, Menu, X } from 'lucide-react';
@@ -13,11 +13,31 @@ export function Navbar() {
   const { lang, setLang, t } = useI18n();
   const [langOpen, setLangOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin');
+  const [authReturnTo, setAuthReturnTo] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [search, setSearch] = useState('');
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    setLangOpen(false);
+    setProfileOpen(false);
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ tab?: 'signin' | 'signup'; returnTo?: string | null }>;
+      setAuthTab(customEvent.detail?.tab ?? 'signin');
+      setAuthReturnTo(customEvent.detail?.returnTo ?? null);
+      setAuthOpen(true);
+    };
+
+    window.addEventListener('open-auth-modal', handler);
+    return () => window.removeEventListener('open-auth-modal', handler);
+  }, []);
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,7 +81,7 @@ export function Navbar() {
 
           <div className="header-actions">
             <div className="relative">
-              <button className="btn lang-btn" onClick={() => setLangOpen((o) => !o)} type="button" aria-expanded={langOpen} suppressHydrationWarning>
+              <button className="btn lang-btn" onClick={() => { setProfileOpen(false); setLangOpen((o) => !o); }} type="button" aria-expanded={langOpen} suppressHydrationWarning>
                 {LANGUAGES.find((l) => l.code === lang)?.label} <ChevronDown size={14} />
               </button>
               {langOpen && (
@@ -82,7 +102,7 @@ export function Navbar() {
 
             {isAuthenticated ? (
               <div className="relative profile-menu-wrapper" suppressHydrationWarning>
-                <button className="profile-button" type="button" onClick={() => setProfileOpen((o) => !o)} suppressHydrationWarning>
+                <button className="profile-button" type="button" onClick={() => { setLangOpen(false); setProfileOpen((o) => !o); }} suppressHydrationWarning>
                   <div className="avatar" suppressHydrationWarning>{(user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase()}</div>
                 </button>
                 {profileOpen && (
@@ -104,11 +124,12 @@ export function Navbar() {
                     <button 
                       type="button" 
                       className="menu-link" 
-                      onClick={() => { 
-                        signOut(); 
+                      onClick={async () => { 
+                        await signOut();
                         setProfileOpen(false);
                         closeAllMenus(); 
-                        router.push('/'); 
+                        router.push('/');
+                        router.refresh();
                       }}
                     >
                       {t('logOut')}
@@ -150,7 +171,7 @@ export function Navbar() {
                 <>
                   <Link href="/dashboard" onClick={() => setMenuOpen(false)}>{t('dashboard')}</Link>
                   <Link href="/profile" onClick={() => setMenuOpen(false)}>{t('profile')}</Link>
-                  <button type="button" className="mobile-signout" onClick={() => { signOut(); router.push('/'); setMenuOpen(false); }}>
+                  <button type="button" className="mobile-signout" onClick={async () => { await signOut(); router.push('/'); router.refresh(); setMenuOpen(false); }}>
                     {t('logOut')}
                   </button>
                 </>
@@ -164,7 +185,17 @@ export function Navbar() {
         )}
       </header>
 
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {authOpen && (
+        <AuthModal
+          onClose={() => {
+            setAuthOpen(false);
+            setAuthTab('signin');
+            setAuthReturnTo(null);
+          }}
+          initialTab={authTab}
+          initialReturnTo={authReturnTo}
+        />
+      )}
     </>
   );
 }

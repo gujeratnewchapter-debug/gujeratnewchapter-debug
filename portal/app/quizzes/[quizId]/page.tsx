@@ -2,19 +2,35 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getQuiz, submitQuiz } from '@/lib/api';
+import { getCourse, getQuiz, submitQuiz } from '@/lib/api';
 
 export default function QuizPage() {
   const { quizId } = useParams<{ quizId: string }>();
   const router = useRouter();
   const [quiz, setQuiz] = useState<any>(null);
+  const [course, setCourse] = useState<any>(null);
   const [responses, setResponses] = useState<Record<number, { choiceIds: number[]; text: string }>>({});
   const [result, setResult] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    getQuiz(Number(quizId)).then((res) => setQuiz(res.data));
+    async function load() {
+      const res = await getQuiz(Number(quizId));
+      const quizData = res.data;
+      setQuiz(quizData);
+
+      if (quizData?.course) {
+        try {
+          const courseRes = await getCourse(quizData.course);
+          setCourse(courseRes.data);
+        } catch (err) {
+          console.warn('Failed to load course for quiz navigation:', err);
+        }
+      }
+    }
+
+    void load();
   }, [quizId]);
 
   function toggle(qid: number, cid: number, multi: boolean) {
@@ -29,6 +45,30 @@ export default function QuizPage() {
 
   function setText(qid: number, text: string) {
     setResponses((prev) => ({ ...prev, [qid]: { choiceIds: prev[qid]?.choiceIds ?? [], text } }));
+  }
+
+  function handleSuccessfulResult() {
+    if (!quiz) return;
+
+    if (quiz.is_final_exam) {
+      const slug = course?.slug;
+      if (slug) router.push(`/courses/${slug}`);
+      else router.push('/profile');
+      return;
+    }
+
+    if (quiz.lesson && course?.sections) {
+      const allLessons = course.sections.flatMap((section: any) => section.lessons ?? []);
+      const currentIndex = allLessons.findIndex((lesson: any) => lesson.id === quiz.lesson);
+      const nextLesson = allLessons[currentIndex + 1] ?? null;
+      if (nextLesson?.id) {
+        router.push(`/courses/${course.slug}/lessons/${nextLesson.id}`);
+        return;
+      }
+    }
+
+    if (course?.slug) router.push(`/courses/${course.slug}`);
+    else router.push('/dashboard');
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,10 +99,14 @@ export default function QuizPage() {
           {result.score_percent}%
         </p>
         <p style={{ fontSize: 18, margin: '10px 0 24px' }}>
-          {result.passed ? '🎉 You passed! The next lesson is now unlocked.' : `You need ${quiz.passing_score_percent}% to pass — try again.`}
+          {result.passed
+            ? quiz.is_final_exam
+              ? '🎉 You passed the final exam and your certificate is ready in your profile.'
+              : '🎉 You passed! The next lesson is now unlocked.'
+            : `You need ${quiz.passing_score_percent}% to pass — try again.`}
         </p>
         {result.passed ? (
-          <button className="btn btn-primary" onClick={() => router.back()}>Continue</button>
+          <button className="btn btn-primary" onClick={handleSuccessfulResult}>Continue</button>
         ) : (
           <button className="btn btn-primary" onClick={() => { setResult(null); setResponses({}); }}>Retry Quiz</button>
         )}
