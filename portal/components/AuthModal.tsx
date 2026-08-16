@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SafeGoogleLogin from './SafeGoogleLogin';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { X, Eye, EyeOff, Github } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
@@ -151,6 +151,24 @@ export function AuthModal({
     }
   }
 
+  async function handleGitHubSignIn() {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setError(err?.message || 'GitHub sign-in failed. Please try again.');
+      setLoading(false);
+    }
+  }
+
   async function handleForgotPassword() {
     const email = forgotPasswordEmail.trim();
     if (!email) {
@@ -200,7 +218,7 @@ export function AuthModal({
           </button>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
           {GOOGLE_CLIENT_ID ? (
             <SafeGoogleLogin onCredential={(c) => handleGoogleCredential(c)} />
           ) : (
@@ -209,12 +227,23 @@ export function AuthModal({
               className="btn btn-primary"
               onClick={handleGoogleSignIn}
               disabled={loading || !GOOGLE_CLIENT_ID}
-              style={{ width: '100%' }}
+              style={{ flex: 1 }}
               title={!GOOGLE_CLIENT_ID ? 'Google sign-in is not configured' : undefined}
             >
-              Continue with Google
+              Google
             </button>
           )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleGitHubSignIn}
+            disabled={loading}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            title="Sign in with GitHub"
+          >
+            <Github size={16} />
+            GitHub
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0', color: 'var(--text-muted)', fontSize: 12 }}>
