@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, filters, views
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Category, Course, Section, Lesson
 from .serializers import (
@@ -115,9 +116,16 @@ class IsLessonCourseInstructorOrReadOnly(permissions.BasePermission):
         return request.user.is_authenticated and (request.user.is_instructor or request.user.is_super_admin)
 
     def has_object_permission(self, request, view, obj):
-        if request.method in permissions.SAFE_METHODS:
+        if request.user.is_authenticated and (request.user.is_super_admin or obj.section.course.instructor_id == request.user.id):
             return True
-        return obj.section.course.instructor_id == request.user.id or request.user.is_super_admin
+        if request.method in permissions.SAFE_METHODS and obj.is_preview:
+            return True
+        if request.method not in permissions.SAFE_METHODS or not request.user.is_authenticated:
+            return False
+        from enrollments.models import Enrollment, is_lesson_unlocked
+        if not Enrollment.objects.filter(student=request.user, course=obj.section.course).exists():
+            return False
+        return is_lesson_unlocked(request.user, obj)
 
 
 class SectionViewSet(viewsets.ModelViewSet):
@@ -149,7 +157,25 @@ class LessonViewSet(viewsets.ModelViewSet):
         section_id = self.request.query_params.get('section')
         if section_id:
             qs = qs.filter(section_id=section_id)
-        return qs
+        user = self.request.user
+        if user.is_authenticated and (user.is_super_admin or user.is_instructor):
+            if user.is_super_admin:
+                return qs
+            return qs.filter(section__course__instructor=user)
+
+        if not user.is_authenticated:
+            return qs.filter(is_preview=True)
+
+        from enrollments.models import Enrollment, is_lesson_unlocked
+        candidate_lessons = qs.filter(
+            Q(is_preview=True) |
+            Q(section__course__enrollments__student=user)
+        ).select_related('section__course').distinct()
+        accessible_ids = [
+            lesson.id for lesson in candidate_lessons
+            if lesson.is_preview or is_lesson_unlocked(user, lesson)
+        ]
+        return qs.filter(id__in=accessible_ids)
 
     def perform_create(self, serializer):
         section = serializer.validated_data.get('section')
