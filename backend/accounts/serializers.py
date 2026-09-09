@@ -29,7 +29,7 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'phone_number', 'bio', 'avatar', 'is_email_verified',
             'created_at',
         ]
-        read_only_fields = ['id', 'is_email_verified', 'created_at']
+        read_only_fields = ['id', 'role', 'is_email_verified', 'created_at']
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -40,7 +40,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'password', 'full_name', 'first_name', 'last_name', 'role']
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'role']
 
     def validate(self, attrs):
         email = (attrs.get('email') or '').strip()
@@ -83,6 +83,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop('password')
         validated_data.pop('full_name', None)
+        validated_data['role'] = User.Role.STUDENT
         user = User(**validated_data)
         user.set_password(password)
         user.save()

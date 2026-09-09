@@ -73,7 +73,6 @@ class GoogleLoginView(APIView):
 
     def post(self, request):
         id_token_str = request.data.get('id_token')
-        role = request.data.get('role', User.Role.STUDENT)
         if not id_token_str:
             return Response({"detail": "id_token is required."}, status=400)
 
@@ -98,7 +97,7 @@ class GoogleLoginView(APIView):
                 'username': email.split('@')[0],
                 'first_name': idinfo.get('given_name', ''),
                 'last_name': idinfo.get('family_name', ''),
-                'role': role,
+                'role': User.Role.STUDENT,
                 'is_email_verified': True,  # Google already verified it
             },
         )
