@@ -6,6 +6,8 @@ django-environ==0.14.0
 django-filter==26.1
 djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1
+gunicorn==23.0.0
+whitenoise==6.9.0
 google-auth==2.56.2
 google-auth-oauthlib==1.4.0
 openai==2.48.0

@@ -62,8 +62,8 @@ AUTH_USER_MODEL = os.environ.get('DJANGO_AUTH_USER_MODEL', 'accounts.User')
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
-    # Keep SecurityMiddleware first, CorsMiddleware should come before CommonMiddleware
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -147,6 +147,14 @@ USE_TZ = True
 STATIC_URL = os.environ.get('DJANGO_STATIC_URL', '/static/')
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # Media files (uploaded by users) - set explicitly to avoid empty MEDIA_URL
 MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')

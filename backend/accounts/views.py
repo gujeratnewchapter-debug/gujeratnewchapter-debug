@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 
 from .serializers import RegisterSerializer, UserSerializer
 from .models import EmailVerificationToken
@@ -77,8 +79,6 @@ class GoogleLoginView(APIView):
             return Response({"detail": "id_token is required."}, status=400)
 
         try:
-            from google.oauth2 import id_token as google_id_token
-            from google.auth.transport import requests as google_requests
             from django.conf import settings as django_settings
 
             idinfo = google_id_token.verify_oauth2_token(
