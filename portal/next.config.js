@@ -1,5 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NODE_ENV === 'production' ? '.next-build' : '.next-dev',
+  async headers() {
+    return [{
+      source: '/(.*)',
+      headers: [{ key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' }],
+    }];
+  },
   images: {
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost' },

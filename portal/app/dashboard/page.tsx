@@ -3,10 +3,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BrainCircuit, CheckCircle2, Plus, Sparkles } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { getMyEnrollments, getCourses } from '@/lib/api';
+import { deleteCourse, getCourses, getInstructorAnalytics, getMyEnrollments } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { InnovationLoader } from '@/components/InnovationLoader';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
@@ -14,6 +15,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [myCourses, setMyCourses] = useState<any[]>([]);
+  const [instructorAnalytics, setInstructorAnalytics] = useState<any>(null);
 
   useEffect(() => {
     if (!isLoading && !isBackendAuthenticated) router.push('/');
@@ -26,12 +28,29 @@ export default function DashboardPage() {
       getCourses({ instructor: user.id }).then((res) => {
         setMyCourses(res.data.results ?? res.data);
       }).catch((err) => { console.error('Failed to load instructor courses:', err); });
+      getInstructorAnalytics().then((res) => setInstructorAnalytics(res.data)).catch((err) => { console.error('Failed to load instructor analytics:', err); });
     } else if (user?.role === 'super_admin') {
       getCourses().then((res) => {
         setMyCourses(res.data.results ?? res.data);
       }).catch((err) => { console.error('Failed to load courses:', err); });
     }
   }, [isBackendAuthenticated, user]);
+
+  async function handleDeleteCourse(course: any) {
+    if (!window.confirm(`Delete "${course.title}" and its lessons? This cannot be undone.`)) return;
+    try {
+      await deleteCourse(course.id);
+      setMyCourses((courses) => courses.filter((item) => item.id !== course.id));
+      setInstructorAnalytics((current: any) => current ? {
+        ...current,
+        courses: current.courses.filter((item: any) => item.course_id !== course.id),
+        totals: { ...current.totals, courses: Math.max(0, current.totals.courses - 1) },
+      } : current);
+    } catch (err) {
+      console.error('Failed to delete course:', err);
+      window.alert('Unable to delete this course. Please try again.');
+    }
+  }
 
   const avgProgress = useMemo(
     () => (enrollments.length ? enrollments.reduce((sum, item) => sum + (item.progress_percent ?? 0), 0) / enrollments.length : 0),
@@ -43,7 +62,7 @@ export default function DashboardPage() {
     [enrollments],
   );
 
-  if (isLoading || !isBackendAuthenticated) return <div className="container section">Loading...</div>;
+  if (isLoading || !isBackendAuthenticated) return <div className="container section"><InnovationLoader label="Loading dashboard" /></div>;
 
   return (
     <div className="container section">
@@ -107,7 +126,7 @@ export default function DashboardPage() {
         ))}
         {enrollments.length === 0 && (
           <div className="card">
-            <p style={{ color: 'var(--text-muted)' }}>You haven't enrolled in a course yet.</p>
+            <p style={{ color: 'var(--text-muted)' }}>You haven&apos;t enrolled in a course yet.</p>
             <Link href="/courses" className="btn btn-primary" style={{ marginTop: 12, display: 'inline-flex' }}>Browse Courses</Link>
           </div>
         )}
@@ -121,12 +140,46 @@ export default function DashboardPage() {
               <Plus size={15} /> New Course
             </button>
           </div>
+          {user?.role === 'instructor' && instructorAnalytics && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 18 }}>
+                {[
+                  ['Registered students', instructorAnalytics.totals.registered_students],
+                  ['Currently attending', instructorAnalytics.totals.attending_students],
+                  ['Completed courses', instructorAnalytics.totals.completed_students],
+                  ['Certificates issued', instructorAnalytics.totals.certificates_issued],
+                ].map(([label, value]) => (
+                  <div className="card" key={String(label)}>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{label}</p>
+                    <p style={{ fontSize: 30, fontWeight: 700, margin: 0 }}>{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="card" style={{ marginBottom: 18, overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+                  <thead><tr>{['Course', 'Registered', 'Attending', 'Completed', 'Certificates', 'Avg. progress', 'Status'].map((heading) => <th key={heading} style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid var(--border)', fontSize: 12 }}>{heading}</th>)}</tr></thead>
+                  <tbody>{instructorAnalytics.courses.map((item: any) => <tr key={item.course_id}>
+                    <td style={{ padding: '10px 8px', fontWeight: 600 }}>{item.title}</td>
+                    <td style={{ padding: '10px 8px' }}>{item.registered_students}</td>
+                    <td style={{ padding: '10px 8px' }}>{item.attending_students}</td>
+                    <td style={{ padding: '10px 8px' }}>{item.completed_students}</td>
+                    <td style={{ padding: '10px 8px' }}>{item.certificates_issued}</td>
+                    <td style={{ padding: '10px 8px' }}>{item.average_progress_percent}%</td>
+                    <td style={{ padding: '10px 8px' }}>{item.status}</td>
+                  </tr>)}</tbody>
+                </table>
+              </div>
+            </>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
             {myCourses.map((c: any) => (
-              <Link key={c.id} href={`/instructor/courses/${c.id}/edit`} className="card">
-                <p style={{ fontWeight: 600 }}>{c.title}</p>
-                <span className="badge" style={{ marginTop: 8, display: 'inline-block' }}>{c.status}</span>
-              </Link>
+              <div key={c.id} className="card">
+                <Link href={`/instructor/courses/${c.id}/edit`} style={{ display: 'block' }}>
+                  <p style={{ fontWeight: 600 }}>{c.title}</p>
+                  <span className="badge" style={{ marginTop: 8, display: 'inline-block' }}>{c.status}</span>
+                </Link>
+                {user?.role === 'instructor' && <button type="button" className="btn" onClick={() => handleDeleteCourse(c)} style={{ marginTop: 14, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Trash2 size={14} /> Delete course</button>}
+              </div>
             ))}
           </div>
         </div>

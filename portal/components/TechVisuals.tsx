@@ -226,13 +226,6 @@ export function TechVisuals({ className = 'tech-visuals' }: TechVisualsProps) {
     };
 
     const render = () => {
-      if (reduced) {
-        ctx.clearRect(0, 0, width, height);
-        drawGrid();
-        drawParticles();
-        return;
-      }
-      time += 0.25;
       ctx.clearRect(0, 0, width, height);
       ctx.globalCompositeOperation = 'source-over';
       drawGrid();
@@ -240,7 +233,6 @@ export function TechVisuals({ className = 'tech-visuals' }: TechVisualsProps) {
       updateNodes();
       drawNodes();
       drawParticles();
-      frameRef.current = window.requestAnimationFrame(render);
     };
 
     const handleMove = (event: MouseEvent) => {

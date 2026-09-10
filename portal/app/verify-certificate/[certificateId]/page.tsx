@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { verifyCertificate } from '@/lib/api';
+import { InnovationLoader } from '@/components/InnovationLoader';
 
 export default function VerifyCertificatePage() {
   const { certificateId } = useParams<{ certificateId: string }>();
@@ -21,7 +22,7 @@ export default function VerifyCertificatePage() {
   }, [certificateId]);
 
   if (status === 'loading') {
-    return <div className="container section">Verifying certificate...</div>;
+    return <div className="container section"><InnovationLoader label="Verifying certificate" /></div>;
   }
 
   if (status === 'invalid' || !data?.valid) {
@@ -43,6 +44,7 @@ export default function VerifyCertificatePage() {
           <li><strong>Learner:</strong> {data.student_name || 'Student'}</li>
           <li><strong>Course:</strong> {data.course_title || data.course}</li>
           <li><strong>Issued:</strong> {data.issued_at ? new Date(data.issued_at).toLocaleDateString() : 'N/A'}</li>
+          <li><strong>Final exam time:</strong> {data.time_taken_seconds != null ? `${Math.floor(data.time_taken_seconds / 60)}m ${String(data.time_taken_seconds % 60).padStart(2, '0')}s` : 'N/A'}</li>
         </ul>
       </div>
     </div>

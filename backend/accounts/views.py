@@ -116,6 +116,16 @@ class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
+class SessionSyncView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            'user': UserSerializer(request.user, context={'request': request}).data,
+            **_tokens_for_user(request.user),
+        })
+
+
 class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Lightbulb, ChevronDown, Search, Menu, X } from 'lucide-react';
+import { Lightbulb, ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n, LANGUAGES } from '@/lib/i18n';
 import { AuthModal } from './AuthModal';
@@ -20,6 +20,16 @@ export function Navbar() {
   const [search, setSearch] = useState('');
   const pathname = usePathname();
   const router = useRouter();
+
+  function avatarSource(avatar?: string | null) {
+    if (!avatar) return null;
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) return avatar;
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+    return `${base.replace(/\/api\/?$/, '')}${avatar.startsWith('/') ? '' : '/'}${avatar}`;
+  }
+
+  const profileAvatar = avatarSource(user?.avatar);
+  const profileInitial = (user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase();
 
   useEffect(() => {
     setLangOpen(false);
@@ -39,12 +49,6 @@ export function Navbar() {
     return () => window.removeEventListener('open-auth-modal', handler);
   }, []);
 
-  function handleSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    router.push(`/courses?search=${encodeURIComponent(search)}`);
-    setMenuOpen(false);
-  }
-
   function closeAllMenus() {
     setLangOpen(false);
     setProfileOpen(false);
@@ -56,28 +60,18 @@ export function Navbar() {
       <header className="site-header" suppressHydrationWarning data-testid="site-header">
         <div className="container header-inner" suppressHydrationWarning>
           <Link href="/" className="brand-link">
-            <Lightbulb size={22} color="var(--accent)" fill="var(--accent)" />
-            Ethiopian Startup School
+            <Lightbulb className="brand-mark" size={22} color="var(--accent)" fill="var(--accent)" />
+            <span className="brand-name">Ethiopian Startup School</span>
           </Link>
 
-          <nav className="desktop-nav">
+          <nav className="desktop-nav" aria-label="Main navigation">
             <Link href="/" className={pathname === '/' ? 'active' : ''}>{t('home')}</Link>
+            <Link href="/about-us" className={pathname === '/about-us' ? 'active' : ''}>{t('aboutUs')}</Link>
             <Link href="/courses" className={pathname?.startsWith('/courses') ? 'active' : ''}>{t('courses')}</Link>
-            <Link href="/ai-tutor" className={pathname === '/ai-tutor' ? 'active' : ''}>{t('aiTutor')}</Link>
-            <Link href="/contact" className={pathname === '/contact' ? 'active' : ''}>{t('contactUs')}</Link>
+            <Link href="/ai/business-advisor" className={pathname?.startsWith('/ai') ? 'active' : ''}>{t('ai')}</Link>
+            <Link href="/services/business-consultant" className={pathname?.startsWith('/services') ? 'active' : ''}>{t('services')}</Link>
+            <Link href="/startup-ecosystem" className={pathname?.startsWith('/startup-ecosystem') ? 'active' : ''}>{t('startupEcosystem')}</Link>
           </nav>
-
-          <form onSubmit={handleSearchSubmit} className="search-form">
-            <Search size={15} className="search-icon" />
-            <input
-              className="input"
-              style={{ paddingLeft: 34 }}
-              placeholder={t('searchPlaceholder')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              suppressHydrationWarning
-            />
-          </form>
 
           <div className="header-actions">
             <div className="relative">
@@ -103,7 +97,11 @@ export function Navbar() {
             {isAuthenticated ? (
               <div className="relative profile-menu-wrapper" suppressHydrationWarning>
                 <button className="profile-button" type="button" onClick={() => { setLangOpen(false); setProfileOpen((o) => !o); }} suppressHydrationWarning>
-                  <div className="avatar" suppressHydrationWarning>{(user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase()}</div>
+                  <div className="avatar" suppressHydrationWarning>
+                    {profileAvatar ? (
+                      <img src={profileAvatar} alt="Profile" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+                    ) : profileInitial}
+                  </div>
                 </button>
                 {profileOpen && (
                   <div className="card profile-menu" suppressHydrationWarning>
@@ -153,24 +151,22 @@ export function Navbar() {
 
         {menuOpen && (
           <div className="mobile-nav">
-            <form onSubmit={handleSearchSubmit} className="search-form mobile-search">
-              <Search size={15} className="search-icon" />
-              <input
-                className="input"
-                style={{ paddingLeft: 34 }}
-                placeholder={t('searchPlaceholder')}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </form>
             <nav className="mobile-links">
               <Link href="/" onClick={() => setMenuOpen(false)} className={pathname === '/' ? 'active' : ''}>{t('home')}</Link>
+              <Link href="/about-us" onClick={() => setMenuOpen(false)}>{t('aboutUs')}</Link>
               <Link href="/courses" onClick={() => setMenuOpen(false)} className={pathname?.startsWith('/courses') ? 'active' : ''}>{t('courses')}</Link>
-              <Link href="/ai-tutor" onClick={() => setMenuOpen(false)} className={pathname === '/ai-tutor' ? 'active' : ''}>{t('aiTutor')}</Link>
+              <Link href="/ai/business-advisor" onClick={() => setMenuOpen(false)}>{t('ai')}</Link>
+              <Link href="/services/business-consultant" onClick={() => setMenuOpen(false)}>{t('services')}</Link>
+              <Link href="/startup-ecosystem" onClick={() => setMenuOpen(false)}>{t('startupEcosystem')}</Link>
               {isAuthenticated ? (
                 <>
                   <Link href="/dashboard" onClick={() => setMenuOpen(false)}>{t('dashboard')}</Link>
-                  <Link href="/profile" onClick={() => setMenuOpen(false)}>{t('profile')}</Link>
+                  <Link href="/profile" onClick={() => setMenuOpen(false)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <span className="avatar" style={{ width: 28, height: 28, fontSize: 12 }}>
+                      {profileAvatar ? <img src={profileAvatar} alt="Profile" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : profileInitial}
+                    </span>
+                    {t('profile')}
+                  </Link>
                   <button type="button" className="mobile-signout" onClick={async () => { await signOut(); router.push('/'); router.refresh(); setMenuOpen(false); }}>
                     {t('logOut')}
                   </button>

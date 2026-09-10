@@ -116,9 +116,16 @@ class Lesson(models.Model):
 
 class Resource(models.Model):
     """Extra downloadable resources attached to a lesson."""
+    class ResourceType(models.TextChoices):
+        FILE = 'file', 'File'
+        VIDEO = 'video', 'Video'
+
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='resources')
     title = models.CharField(max_length=255)
-    file = models.FileField(upload_to='resources/')
+    resource_type = models.CharField(max_length=20, choices=ResourceType.choices, default=ResourceType.FILE)
+    url = models.URLField(blank=True)
+    file = models.FileField(upload_to='resources/', blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return self.title

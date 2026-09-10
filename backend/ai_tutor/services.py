@@ -32,6 +32,19 @@ SYSTEM_PROMPTS = {
     ),
 }
 
+RESPONSE_FORMAT_RULES = (
+    "\n\nResponse writing rules: Open with one or two direct, practical context sentences. "
+    "Never begin with a dictionary-style definition. "
+    "Use at most two heading levels; use one H1 only for a full document. "
+    "Every heading must be followed by at least one complete sentence before any list. "
+    "Use bullets only for genuinely parallel, scannable items, and keep nesting to one level. "
+    "Do not bold the first words of list items or turn every step into a bold label followed by a colon. "
+    "Use no more than one or two bold phrases in the entire response, and bold only genuine defined terms or key phrases. "
+    "Group related steps under short section headings instead of producing a long numbered sequence. "
+    "Include exactly one closing takeaway line, formatted only as a blockquote beginning with 'Key takeaway:' or 'Next step:'. "
+    "Never repeat the closing takeaway as plain text. Be direct, concrete, and avoid unnecessary headings or nested structure."
+)
+
 
 def retrieve_context(query, course=None, top_k=3):
     """Naive keyword-overlap retrieval over indexed knowledge documents."""
@@ -62,6 +75,7 @@ def get_ai_reply(mode, conversation_history, user_message, course=None):
     context_text, sources = retrieve_context(user_message, course=course)
 
     system_prompt = SYSTEM_PROMPTS.get(mode, SYSTEM_PROMPTS['tutor'])
+    system_prompt += RESPONSE_FORMAT_RULES
     if context_text:
         system_prompt += f"\n\nApproved knowledge base context:\n{context_text}"
 
@@ -69,20 +83,51 @@ def get_ai_reply(mode, conversation_history, user_message, course=None):
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_message})
 
-    if not settings.OPENAI_API_KEY:
+    api_key = getattr(settings, 'OPENROUTER_API_KEY', '') or getattr(settings, 'OPENAI_API_KEY', '')
+    if not api_key:
         # Dev-mode fallback so the app runs without an API key configured
         return (
-            "[AI Tutor - dev mode: set OPENAI_API_KEY to enable real responses] "
+            "[AI Tutor - dev mode: configure OPENROUTER_API_KEY to enable real responses] "
             f"I received your question: '{user_message}'.",
             sources,
         )
 
-    from openai import OpenAI
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model=settings.AI_MODEL,
-        messages=messages,
-        max_tokens=800,
+    try:
+        from openai import OpenAI
+        client_kwargs = {'api_key': api_key}
+        if getattr(settings, 'OPENROUTER_API_KEY', ''):
+            client_kwargs['base_url'] = getattr(settings, 'OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
+            client_kwargs['default_headers'] = {
+                'HTTP-Referer': getattr(settings, 'AI_SITE_URL', ''),
+                'X-Title': getattr(settings, 'AI_SITE_NAME', 'Ethiopian Startup School'),
+            }
+        client = OpenAI(**client_kwargs)
+        model = getattr(settings, 'AI_MODEL', 'gpt-4o-mini')
+        last_error = None
+        for attempt in range(2):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=800,
+                )
+                reply = response.choices[0].message.content
+                return reply, sources
+            except Exception as error:
+                last_error = error
+        import logging
+        logging.getLogger(__name__).warning(
+            'AI provider request failed after retry: %s (%s)',
+            type(last_error).__name__,
+            getattr(last_error, 'status_code', 'unknown status'),
+        )
+    except Exception as error:
+        import logging
+        logging.getLogger(__name__).warning('AI client setup failed: %s', type(error).__name__)
+        # Keep chat usable when the provider is unavailable, misconfigured, or
+        # rate-limited; provider details must not leak to the student.
+    return (
+        "The AI service is temporarily unavailable. "
+        "Please try again shortly, or ask your instructor about this lesson.",
+        sources,
     )
-    reply = response.choices[0].message.content
-    return reply, sources

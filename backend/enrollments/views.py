@@ -22,11 +22,21 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     def mark_lesson_complete(self, request, pk=None):
         enrollment = self.get_object()
         lesson_id = request.data.get('lesson_id')
-        lesson = Lesson.objects.get(id=lesson_id, section__course=enrollment.course)
+        try:
+            lesson = Lesson.objects.get(id=lesson_id, section__course=enrollment.course)
+        except (Lesson.DoesNotExist, TypeError, ValueError):
+            return Response({'detail': 'Lesson not found in this course.'}, status=status.HTTP_404_NOT_FOUND)
 
         if not is_lesson_unlocked(request.user, lesson):
             return Response(
-                {"detail": "Pass the previous lesson's quiz (80%+) to unlock this lesson."},
+                {"detail": "Complete the previous lesson and pass any required quiz (80%+) to unlock this lesson."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        lesson_quiz = getattr(lesson, 'quiz', None)
+        if lesson_quiz and not lesson_quiz.attempts.filter(student=request.user, passed=True).exists():
+            return Response(
+                {'detail': 'Pass this lesson quiz (80%+) before marking the lesson complete.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -42,6 +52,17 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             enrollment.completed_at = timezone.now()
         enrollment.save()
         return Response(EnrollmentSerializer(enrollment).data)
+
+    @action(detail=True, methods=['get'])
+    def progress(self, request, pk=None):
+        enrollment = self.get_object()
+        completed_lesson_ids = list(
+            enrollment.lesson_progress.filter(is_completed=True).values_list('lesson_id', flat=True)
+        )
+        return Response({
+            'progress_percent': enrollment.progress_percent,
+            'completed_lesson_ids': completed_lesson_ids,
+        })
 
 
 class BookmarkViewSet(viewsets.ModelViewSet):

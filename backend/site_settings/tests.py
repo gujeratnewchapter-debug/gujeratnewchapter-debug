@@ -5,6 +5,21 @@ from .serializers import SiteSettingsSerializer
 
 
 class SiteSettingsSerializerTests(TestCase):
+    def test_payment_details_are_optional(self):
+        settings = SiteSettings.load()
+        settings.bank_name = ''
+        settings.bank_account_name = ''
+        settings.bank_account_number = ''
+        settings.telebirr_number = ''
+        settings.save()
+
+        data = SiteSettingsSerializer(settings).data
+
+        self.assertEqual(data['bank_name'], '')
+        self.assertEqual(data['bank_account_name'], '')
+        self.assertEqual(data['bank_account_number'], '')
+        self.assertEqual(data['telebirr_number'], '')
+
     def test_serializer_exposes_admin_editable_social_and_hero_fields(self):
         settings = SiteSettings.load()
         settings.hero_title = 'Build your next idea'

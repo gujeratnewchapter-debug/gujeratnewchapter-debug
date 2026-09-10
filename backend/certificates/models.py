@@ -12,6 +12,7 @@ class Certificate(models.Model):
     issued_at = models.DateTimeField(auto_now_add=True)
     pdf_file = models.FileField(upload_to='certificates/', blank=True, null=True)
     verification_url = models.URLField(blank=True)
+    time_taken_seconds = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ('student', 'course')

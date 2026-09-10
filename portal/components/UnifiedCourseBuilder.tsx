@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { InnovationLoader } from '@/components/InnovationLoader';
 import * as api from '@/lib/api';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -77,6 +79,7 @@ type LessonDraft = {
   duration_minutes: number;
   content_text: string;
   video_url: string;
+  video_resources: string[];
   file: File | null;
   is_preview: boolean;
   quiz: QuizDraft | null;
@@ -152,6 +155,7 @@ const createLesson = (): LessonDraft => ({
   duration_minutes: 15,
   content_text: '',
   video_url: '',
+  video_resources: [],
   file: null,
   is_preview: false,
   quiz: null,
@@ -267,14 +271,15 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
             duration_minutes: Number(lesson.duration_minutes ?? 0),
             content_text: lesson.content_text ?? '',
             video_url: lesson.video_url ?? '',
+            video_resources: (lesson.resources ?? []).filter((resource: any) => resource.resource_type === 'video' && resource.url).map((resource: any) => resource.url),
             file: null,
             is_preview: !!lesson.is_preview,
             quiz: null,
           })),
         }));
 
-        for (const module of builtModules) {
-          for (const lesson of module.lessons) {
+        for (const courseModule of builtModules) {
+          for (const lesson of courseModule.lessons) {
             if (!lesson.id) continue;
             const quizResult = await api.getQuizzesForLesson(lesson.id);
             const quizData = (quizResult.data.results ?? quizResult.data)?.[0];
@@ -319,6 +324,8 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
   }, [courseId, mode]);
 
   const liveCourseSlug = useMemo(() => course.slug || slugify(course.title) || 'course', [course.slug, course.title]);
+  const materialInputRef = useRef<HTMLInputElement | null>(null);
+  const [materialTarget, setMaterialTarget] = useState<{ moduleLocalId: string; lessonLocalId: string } | null>(null);
 
   function updateCourseField<K extends keyof CourseDraft>(field: K, value: CourseDraft[K]) {
     setCourse((prev) => ({ ...prev, [field]: value }));
@@ -333,6 +340,19 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
       ...module,
       lessons: module.lessons.map((lesson) => (lesson.localId === lessonLocalId ? { ...lesson, ...patch } : lesson)),
     })));
+  }
+
+  function chooseLessonFile(moduleLocalId: string, lessonLocalId: string) {
+    setMaterialTarget({ moduleLocalId, lessonLocalId });
+    materialInputRef.current?.click();
+  }
+
+  function handleLessonFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file && materialTarget) {
+      updateLesson(materialTarget.moduleLocalId, materialTarget.lessonLocalId, { file });
+    }
+    event.target.value = '';
   }
 
   function addModule() {
@@ -628,6 +648,9 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
             await api.apiClient.patch(`/lessons/${lessonId}/`, fd);
           }
 
+          if (!lessonId) throw new Error('Lesson could not be saved.');
+          await api.replaceVideoResources(lessonId, lesson.video_resources.filter((videoUrl) => videoUrl.trim()).map((videoUrl) => videoUrl.trim()));
+
           if (lesson.quiz) {
             let quizId = lesson.quiz.id;
             const quizPayload = {
@@ -703,10 +726,17 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
     0,
   );
 
-  if (isLoading) return <div className="container section">Loading builder…</div>;
+  if (isLoading) return <div className="container section"><InnovationLoader label="Loading builder" /></div>;
 
   return (
     <div className="container section" style={{ maxWidth: 1400 }}>
+      <input
+        ref={materialInputRef}
+        type="file"
+        accept="video/*,audio/*,application/pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt,.html,.csv,image/*"
+        onChange={handleLessonFileChange}
+        style={{ display: 'none' }}
+      />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <div>
           <p style={{ color: 'var(--brand)', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.2, margin: 0 }}>{mode === 'new' ? 'Create' : 'Edit'} course</p>
@@ -734,7 +764,7 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 24 }}>
+      <div className="builder-layout" style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 24 }}>
         <aside className="card" style={{ padding: 16, height: 'fit-content', position: 'sticky', top: 20 }}>
           <p style={{ fontWeight: 700, letterSpacing: '0.08em', fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>COURSE BUILDER</p>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -985,6 +1015,17 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
                           )}
 
                           <div style={{ marginTop: 12 }}>
+                            <label className="label">Additional video URLs</label>
+                            {lesson.video_resources.map((videoUrl, videoIndex) => (
+                              <div key={`${lesson.localId}-video-${videoIndex}`} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                                <input className="input" value={videoUrl} onChange={(e) => updateLesson(module.localId, lesson.localId, { video_resources: lesson.video_resources.map((value, index) => index === videoIndex ? e.target.value : value) })} placeholder="https://youtube.com/... or https://vimeo.com/..." />
+                                <button className="btn" type="button" onClick={() => updateLesson(module.localId, lesson.localId, { video_resources: lesson.video_resources.filter((_, index) => index !== videoIndex) })}>Remove</button>
+                              </div>
+                            ))}
+                            <button className="btn" type="button" onClick={() => updateLesson(module.localId, lesson.localId, { video_resources: [...lesson.video_resources, ''] })}>Add another video</button>
+                          </div>
+
+                          <div style={{ marginTop: 12 }}>
                             <label className="label">Lesson content</label>
                             <RichTextEditor value={lesson.content_text} onChange={(html) => updateLesson(module.localId, lesson.localId, { content_text: html })} placeholder="Write rich lesson content here." />
                           </div>
@@ -993,11 +1034,10 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
                             <label className="label">Learning materials</label>
                             <div className="card" style={{ padding: 12, color: 'var(--text-muted)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                <button className="btn" type="button"><Upload size={14} /> Add PDF</button>
-                                <button className="btn" type="button"><FileText size={14} /> Add document</button>
-                                <button className="btn" type="button"><BookOpen size={14} /> Add resource</button>
+                                <button className="btn" type="button" onClick={() => chooseLessonFile(module.localId, lesson.localId)}><Upload size={14} /> Choose file</button>
+                                {lesson.file && <span style={{ fontSize: 12, color: 'var(--brand)' }}>{lesson.file.name}</span>}
                               </div>
-                              <p style={{ margin: '8px 0 0', fontSize: 12 }}>Material support is included in the course builder flow. Upload and manage PDF, slides, docs, videos, and resource links from this lesson card.</p>
+                              <p style={{ margin: '8px 0 0', fontSize: 12 }}>Upload a PDF, PowerPoint, document, video, audio file, image, archive, or other learning material. It will be available to learners when the course is saved.</p>
                             </div>
                           </div>
 
@@ -1119,7 +1159,7 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
                 <span className="badge">{course.status}</span>
               </div>
 
-              <div style={{ marginTop: 18, color: 'var(--text-muted)' }} dangerouslySetInnerHTML={{ __html: course.description || '<p>Course description preview appears here.</p>' }} />
+              <div style={{ marginTop: 18, color: 'var(--text-muted)' }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(course.description || '<p>Course description preview appears here.</p>') }} />
 
               <div style={{ display: 'grid', gap: 12, marginTop: 20 }}>
                 {modules.map((module, index) => (

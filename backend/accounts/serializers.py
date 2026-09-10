@@ -31,6 +31,12 @@ class UserSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'role', 'is_email_verified', 'created_at']
 
+    def validate_avatar(self, value):
+        request = self.context.get('request')
+        if self.instance and self.instance.is_instructor and request and request.user == self.instance:
+            raise serializers.ValidationError('Instructor photos are managed by an administrator.')
+        return value
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False, allow_blank=True)

@@ -65,6 +65,7 @@ class QuizAttempt(models.Model):
     submitted_at = models.DateTimeField(null=True, blank=True)
     score_percent = models.FloatField(null=True, blank=True)
     passed = models.BooleanField(default=False)
+    duration_seconds = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return f"{self.student} - {self.quiz} ({self.score_percent})"

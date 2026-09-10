@@ -96,7 +96,7 @@ export function Footer() {
               </Link>
             ))}
           </div>
-          <div className="footer-socials" style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          <div className="footer-socials">
             {socialLinks.length > 0 ? socialLinks.map((item) => {
               const Icon = SOCIAL_ICON_MAP[item.platform?.toLowerCase()] ?? Globe;
               return (
@@ -119,10 +119,10 @@ export function Footer() {
 
           <div className="footer-meta-row">
             <p className="footer-meta-title">{t('supportUs')}</p>
-            <p className="footer-meta">{settings.bank_name}</p>
-            <p className="footer-meta">Account Name: {settings.bank_account_name}</p>
-            <p className="footer-meta">Account Number: {settings.bank_account_number || '—'}</p>
-            <p className="footer-meta">Telebirr: {settings.telebirr_number}</p>
+            {settings.bank_name && <p className="footer-meta">{settings.bank_name}</p>}
+            {settings.bank_account_name && <p className="footer-meta">Account Name: {settings.bank_account_name}</p>}
+            {settings.bank_account_number && <p className="footer-meta">Account Number: {settings.bank_account_number}</p>}
+            {settings.telebirr_number && <p className="footer-meta">Telebirr: {settings.telebirr_number}</p>}
           </div>
         </div>
 

@@ -6,6 +6,7 @@ import { Camera, CheckCircle2, CreditCard, GraduationCap, PencilLine, Save, Spar
 import { useAuth } from '@/lib/auth-context';
 import { getMyCertificates, getMyEnrollments, resendVerification, apiClient, updateMe } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { InnovationLoader } from '@/components/InnovationLoader';
 
 export default function ProfilePage() {
   const { user, isAuthenticated, isBackendAuthenticated, isLoading, signOut, refreshProfile } = useAuth();
@@ -96,14 +97,14 @@ export default function ProfilePage() {
     }
   }
 
-  if (isLoading || !isBackendAuthenticated) return <div className="container section">Loading...</div>;
+  if (isLoading || !isBackendAuthenticated) return <div className="container section"><InnovationLoader label="Loading profile" /></div>;
 
   return (
     <div className="container section" style={{ maxWidth: 980 }}>
       <div className="card" style={{ padding: 24, marginBottom: 24 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <label style={{ position: 'relative', cursor: 'pointer' }} title="Change photo">
+            <label style={{ position: 'relative', cursor: user?.role === 'instructor' ? 'default' : 'pointer' }} title={user?.role === 'instructor' ? 'Instructor photo managed by an administrator' : 'Change photo'}>
               {user?.avatar ? (
                 <img src={user.avatar} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />
               ) : (
@@ -111,10 +112,12 @@ export default function ProfilePage() {
                   {(user?.first_name?.[0] ?? user?.username?.[0] ?? '?').toUpperCase()}
                 </div>
               )}
-              <div style={{ position: 'absolute', bottom: -2, right: -2, width: 24, height: 24, borderRadius: '50%', background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Camera size={12} />
-              </div>
-              <input type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} disabled={uploadingAvatar} />
+              {user?.role !== 'instructor' && <>
+                <div style={{ position: 'absolute', bottom: -2, right: -2, width: 24, height: 24, borderRadius: '50%', background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Camera size={12} />
+                </div>
+                <input type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} disabled={uploadingAvatar} />
+              </>}
             </label>
             <div>
               <p style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{user?.first_name || user?.username} {user?.last_name}</p>
@@ -132,7 +135,7 @@ export default function ProfilePage() {
 
         {!user?.is_email_verified && (
           <div className="card" style={{ borderColor: 'var(--accent)', marginTop: 18 }}>
-            <p style={{ fontSize: 13, marginBottom: 10 }}>Your email isn't verified yet.</p>
+            <p style={{ fontSize: 13, marginBottom: 10 }}>Your email isn&apos;t verified yet.</p>
             {resent ? (
               <p style={{ fontSize: 13, color: 'var(--brand)' }}>Verification email resent — check your inbox.</p>
             ) : (
@@ -196,7 +199,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
+      <div className="profile-progress-layout" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
         <div className="card" style={{ padding: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <GraduationCap size={18} color="var(--brand)" />
@@ -247,7 +250,7 @@ export default function ProfilePage() {
       <div className="card" style={{ padding: 20, marginTop: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <CreditCard size={18} color="var(--brand)" />
-          <h2 style={{ fontSize: 18, margin: 0 }}>Certificates</h2>
+          <h2 id="certificates" style={{ fontSize: 18, margin: 0 }}>Certificates</h2>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

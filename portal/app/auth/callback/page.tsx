@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { getMe, setDjangoAuthToken, syncSupabaseSession } from '@/lib/api';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -11,10 +12,18 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const complete = async () => {
       try {
-        const { error } = await supabase.auth.getSession();
+        const { data: sessionData, error } = await supabase.auth.getSession();
         if (error) throw error;
+        const session = sessionData.session;
+        let target = '/dashboard';
+        if (session?.access_token) {
+          const { data: djangoSession } = await syncSupabaseSession(session.access_token);
+          setDjangoAuthToken(djangoSession.access);
+          const { data: profile } = await getMe();
+          if (profile.role === 'instructor') target = '/instructor/courses/new';
+        }
         setMessage('Sign-in complete. Redirecting...');
-        router.push('/dashboard');
+        router.push(target);
       } catch (err: any) {
         console.error('Auth callback error:', err);
         setMessage(err?.message ? `Sign-in failed: ${err.message}` : 'The sign-in could not be completed. Please try again.');

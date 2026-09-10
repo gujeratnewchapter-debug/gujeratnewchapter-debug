@@ -58,8 +58,49 @@ class QuizSerializer(serializers.ModelSerializer):
             'question_count',
         ]
 
+    def validate(self, attrs):
+        course = attrs.get('course', getattr(self.instance, 'course', None))
+        section = attrs.get('section', getattr(self.instance, 'section', None))
+        lesson = attrs.get('lesson', getattr(self.instance, 'lesson', None))
+        if section and section.course_id != course.id:
+            raise serializers.ValidationError({'section': 'The section must belong to the selected course.'})
+        if lesson and lesson.section.course_id != course.id:
+            raise serializers.ValidationError({'lesson': 'The lesson must belong to the selected course.'})
+        if section and lesson and lesson.section_id != section.id:
+            raise serializers.ValidationError({'lesson': 'The lesson must belong to the selected section.'})
+        return attrs
+
     def get_question_count(self, obj):
         return obj.questions.count()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user = request.user if request else None
+        if user and user.is_authenticated and (user.is_instructor or user.is_super_admin):
+            return data
+
+        accessible = bool(instance.lesson_id and instance.lesson.is_preview)
+        if user and user.is_authenticated:
+            from enrollments.models import Enrollment, LessonProgress, is_lesson_unlocked
+            enrollment = Enrollment.objects.filter(
+                student=user, course=instance.course,
+            ).first()
+            if enrollment:
+                if instance.lesson_id:
+                    accessible = is_lesson_unlocked(user, instance.lesson)
+                elif instance.is_final_exam:
+                    required_lessons = instance.section.lessons.all() if instance.section_id else instance.course.sections.values_list('lessons__id', flat=True)
+                    required_ids = [lesson.id for lesson in required_lessons] if instance.section_id else list(required_lessons)
+                    completed_ids = set(LessonProgress.objects.filter(
+                        enrollment=enrollment, lesson_id__in=required_ids, is_completed=True,
+                    ).values_list('lesson_id', flat=True))
+                    accessible = bool(required_ids) and set(required_ids).issubset(completed_ids)
+
+        if not accessible:
+            data['questions'] = []
+            data['question_count'] = 0
+        return data
 
 
 class QuizInstructorSerializer(QuizSerializer):
@@ -81,4 +122,4 @@ class QuizSubmitSerializer(serializers.Serializer):
 class QuizAttemptResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizAttempt
-        fields = ['id', 'quiz', 'started_at', 'submitted_at', 'score_percent', 'passed']
+        fields = ['id', 'quiz', 'started_at', 'submitted_at', 'score_percent', 'passed', 'duration_seconds']

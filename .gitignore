@@ -22,10 +22,13 @@ backend/.env.*
 # Node / Next.js
 portal/node_modules/
 portal/.next/
+portal/.next-build/
+portal/.next-dev/
 portal/out/
 portal/.env
 portal/.env.local
 portal/.env.*
+*.tsbuildinfo
 
 # OS/editor
 .DS_Store

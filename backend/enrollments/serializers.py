@@ -11,6 +11,12 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_detail', 'enrolled_at', 'completed_at', 'progress_percent']
         read_only_fields = ['id', 'enrolled_at', 'completed_at', 'progress_percent']
 
+    def validate_course(self, course):
+        from courses.models import Course
+        if course.status != Course.Status.PUBLISHED:
+            raise serializers.ValidationError('Only published courses can be enrolled in.')
+        return course
+
 
 class LessonProgressSerializer(serializers.ModelSerializer):
     class Meta:

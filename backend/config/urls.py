@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/', include('certificates.urls')),
     path('api/ai/', include('ai_tutor.urls')),
     path('api/', include('site_settings.urls')),
+    path('api/platform/', include('ess_platform.urls')),
 ]
 
 if settings.DEBUG:

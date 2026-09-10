@@ -18,10 +18,10 @@ class SiteSettings(models.Model):
     support_email = models.EmailField(default="tilahunalenee@gmail.com")
 
     # Support us / donation details
-    bank_name = models.CharField(max_length=255, default="Commercial Bank of Ethiopia (CBE)")
-    bank_account_name = models.CharField(max_length=255, default="Commercial Bank of Ethiopia")
+    bank_name = models.CharField(max_length=255, blank=True, default="")
+    bank_account_name = models.CharField(max_length=255, blank=True, default="")
     bank_account_number = models.CharField(max_length=100, blank=True, default="")
-    telebirr_number = models.CharField(max_length=50, default="+251941883746")
+    telebirr_number = models.CharField(max_length=50, blank=True, default="")
 
     # Email branding
     email_sender_name = models.CharField(max_length=255, default="Ethiopian Startup School")
@@ -92,3 +92,37 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"{self.subject} — {self.name}"
+
+
+class PageContent(models.Model):
+    """Admin-managed content for any public frontend page."""
+    slug = models.SlugField(unique=True, help_text='Frontend route key, for example about-us or startup-ecosystem')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    content = models.JSONField(default=dict, blank=True, help_text='Structured page content. Use en, am, om, and ti keys for translations.')
+    is_published = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['slug']
+
+    def __str__(self):
+        return self.title
+
+
+class PageSection(models.Model):
+    page = models.ForeignKey(PageContent, on_delete=models.CASCADE, related_name='sections')
+    key = models.SlugField(help_text='Stable section key, for example mission or team')
+    title = models.CharField(max_length=255, blank=True)
+    body = models.TextField(blank=True)
+    image = models.ImageField(upload_to='page_sections/', blank=True, null=True)
+    content = models.JSONField(default=dict, blank=True, help_text='Use en, am, om, and ti keys with title and body values.')
+    order = models.PositiveIntegerField(default=0)
+    is_published = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+        unique_together = [('page', 'key')]
+
+    def __str__(self):
+        return f'{self.page.title} - {self.key}'

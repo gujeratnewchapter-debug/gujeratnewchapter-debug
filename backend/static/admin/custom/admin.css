@@ -1,125 +1,129 @@
-/* Custom admin styles: add a subtle background image and center the login box */
-html, body {
-  height: 100%;
-  margin: 0;
-}
-body {
-  background-image: url('/static/admin/custom/admin-bg.svg');
-  background-repeat: no-repeat;
-  background-position: center top;
-  background-size: cover;
-  background-color: #0f172a; /* dark fallback */
-  color: #e6eef8;
-}
-
-/* Make admin content slightly translucent on top of background */
-.container, .module, .dashboard, #content-main, .module caption {
-  background: rgba(255,255,255,0.04);
-}
-
-/* Center the login form vertically */
-body.login #content, body.login #content-main {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 80vh;
-}
-
-.login h1 a {
-  color: #fff;
-}
 :root {
   color-scheme: light;
-  --admin-bg: #f4f7fc;
-  --admin-surface: rgba(255, 255, 255, 0.92);
-  --admin-border: #d2d6dc;
-  --admin-text: #111827;
-  --admin-muted: #6b7280;
-  --admin-primary: #094c82;
-  --admin-primary-muted: #0f5d9d;
-  --admin-radius: 0.75rem;
-  --admin-shadow: 0 18px 45px rgba(15, 76, 129, 0.08);
+  --admin-bg: #f5f7fb;
+  --admin-surface: #ffffff;
+  --admin-surface-soft: #f8fafc;
+  --admin-border: #e4e8ef;
+  --admin-text: #172033;
+  --admin-muted: #718096;
+  --admin-primary: #155e75;
+  --admin-primary-dark: #0f4658;
+  --admin-accent: #e67e22;
+  --admin-radius: 14px;
+  --admin-shadow: 0 12px 32px rgba(31, 48, 70, 0.07);
+}
+
+html, body {
+  min-height: 100%;
 }
 
 body {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: rgba(244,247,252,0.85) url("/static/admin/custom/admin-bg.png") no-repeat center center fixed;
-  background-size: cover;
+  margin: 0;
+  color: var(--admin-text);
+  background:
+    linear-gradient(rgba(245, 247, 251, 0.84), rgba(245, 247, 251, 0.92)),
+    url('/static/admin/custom/admin-bg.png') center / cover fixed;
+  font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 }
 
 #container {
   min-height: 100vh;
-  background: transparent;
+  background: var(--admin-bg);
 }
 
 #header,
-#footer,
-#content,
-.module,
-fieldset.module,
-.nav-sidebar {
-  background: var(--admin-surface);
+#header {
+  position: relative;
+  min-height: 72px;
+  padding: 0 28px;
+  background: #102a43;
+  box-shadow: 0 4px 18px rgba(16, 42, 67, 0.14);
 }
 
-#content,
-#footer,
-.nav-sidebar {
-  background: rgba(255, 255, 255, 0.92);
+#header::after {
+  position: absolute;
+  right: 28px;
+  bottom: 0;
+  left: 28px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--admin-accent), #f1b24a, transparent);
+  content: "";
 }
 
+#header .branding {
+  display: flex;
+  align-items: center;
+  min-height: 72px;
+}
+
+#header #site-name a {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: #ffffff;
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+#header #site-name a::before {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--admin-accent);
+  color: #ffffff;
+  content: "E";
+  font-size: 17px;
+  font-weight: 800;
+}
+
+#header .breadcrumbs {
+  background: rgba(255, 255, 255, 0.06);
+  color: #d9e5ef;
+  border-radius: 10px;
+}
+
+#header .breadcrumbs a,
+#header .user-tools a,
+#header .user-tools button {
+  color: #e8f1f7;
+}
+
+#header .user-tools a:hover,
+#header .user-tools button:hover {
+  color: #ffffff;
+}
+
+#content {
+  padding: 30px 32px 38px;
+  background: transparent;
+}
+
+#content-main {
+  max-width: 1380px;
+}
+
+/* Keep the dashboard focused on current work, while preserving the audit log. */
 #recent-actions-module,
 .module.recent-actions {
   display: none !important;
 }
 
-#header {
-  background: linear-gradient(135deg, rgba(15,76,129,0.96), rgba(26,105,166,0.98));
-}
-
-#header .branding a,
-#header .branding,
-#header .breadcrumbs a,
-#header .breadcrumbs {
-  color: #ffffff;
-}
-
-#header .user-tools a,
-#header .user-tools button {
-  color: rgba(255,255,255,0.9);
-}
-
-#header .user-tools button {
-  border-color: rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.1);
-}
-
-#header .branding a:hover,
-#header .user-tools a:hover,
-#header .user-tools button:hover {
-  color: #f8fafc;
-}
-
-#container {
-  min-height: 100vh;
-}
-
-#content {
-  padding: 22px 22px 28px;
-}
-
 .module,
 fieldset.module {
-  border: 1px solid rgba(226,232,240,0.9);
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
   box-shadow: var(--admin-shadow);
   background: var(--admin-surface);
   border-radius: var(--admin-radius);
 }
 
 fieldset.module {
-  padding: 22px;
+  padding: 20px;
 }
 
-#content-main .module,
 #content-main .module caption,
 #content-main .module h2 {
   background: var(--admin-surface);
@@ -131,88 +135,207 @@ fieldset.module {
 #content h4,
 #content h5 {
   color: var(--admin-text);
+  letter-spacing: -0.015em;
 }
 
 #content .submit-row .default,
-button, input[type=submit] {
-  border-radius: 0.75rem;
+button,
+input[type=submit],
+.object-tools a {
+  border: 0;
+  border-radius: 10px;
   background: var(--admin-primary);
-  border-color: var(--admin-primary);
   color: #ffffff;
-  padding: 0.85rem 1.4rem;
+  font-weight: 700;
+  box-shadow: 0 5px 12px rgba(21, 94, 117, 0.14);
 }
 
-button:hover, input[type=submit]:hover,
+#content .submit-row .default,
+button,
+input[type=submit] {
+  padding: 0.75rem 1.15rem;
+}
+
+button:hover,
+input[type=submit]:hover,
+.object-tools a:hover,
 #content .submit-row .default:hover {
-  background: var(--admin-primary-muted);
+  background: var(--admin-primary-dark);
+  color: #ffffff;
+}
+
+.object-tools a.addlink {
+  background: var(--admin-accent);
 }
 
 #content select,
 #content input[type=text],
 #content input[type=email],
 #content input[type=password],
+#content input[type=url],
 #content textarea,
 #content input[type=search],
-#content input[type=number] {
-  border-radius: 0.75rem;
-  border: 1px solid #d2d6dc;
-  background: #f8fafc;
+#content input[type=number],
+#content input[type=file] {
+  box-sizing: border-box;
+  min-height: 42px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: var(--admin-surface-soft);
+  color: #ffffff;
   color: var(--admin-text);
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.85rem;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
-#content label,
+#content input[type=file] {
+  padding: 0.45rem 0.6rem;
+}
+
+#content textarea {
+  min-height: 110px;
+}
+
+#content input:focus,
+#content select:focus,
+#content textarea:focus {
+  border-color: var(--admin-primary);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(21, 94, 117, 0.12);
+  outline: 0;
+}
+
 .module caption,
 .module h2,
 fieldset.module legend {
+  color: var(--admin-text);
+  font-weight: 750;
+}
+
+.module caption,
+.module h2 {
+  padding: 16px 18px;
+  background: #f3f7f9;
+}
+
+.module table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.module th,
+.module td {
+  border-bottom: 1px solid var(--admin-border);
+  padding: 13px 15px;
+  vertical-align: middle;
+}
+
+.module tr:last-child td {
+  border-bottom: 0;
+}
+
+.module tbody tr:hover {
+  background: #f8fbfc;
+}
+
+.module th {
   color: var(--admin-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-#content .submit-row {
-  padding: 14px 0 0;
+.module td a,
+.results a {
+  color: var(--admin-primary);
+  font-weight: 700;
 }
 
-#footer {
-  padding: 20px 22px;
-  color: var(--admin-muted);
-}
-
+#nav-sidebar,
 .nav-sidebar {
+  border-right: 1px solid var(--admin-border);
   background: #ffffff;
 }
 
-.nav-sidebar li a {
-  border-radius: 0.75rem;
+.nav-sidebar a {
+  margin: 3px 10px;
+  border-radius: 9px;
+  color: var(--admin-muted);
+  font-weight: 650;
 }
 
-.nav-sidebar li a:hover,
-.nav-sidebar li a.active {
-  background: rgba(15, 76, 129, 0.08);
+.nav-sidebar a:hover,
+.nav-sidebar a.active {
+  background: #eaf4f5;
   color: var(--admin-primary);
 }
 
+.paginator {
+  margin-top: 18px;
+  color: var(--admin-muted);
+}
+
+.paginator a,
+.paginator .this-page {
+  display: inline-block;
+  min-width: 30px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.paginator a:hover,
+.paginator .this-page {
+  background: #eaf4f5;
+  color: var(--admin-primary);
+}
+
+body.login {
+  background: #102a43;
+}
+
+body.login #container {
+  background: radial-gradient(circle at 15% 10%, rgba(230, 126, 34, 0.22), transparent 34%), #102a43;
+}
+
+body.login #content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 72px);
+}
+
+body.login #content-main {
+  width: min(410px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+body.login #header {
+  box-shadow: none;
+}
+
+#footer {
+  padding: 22px 32px;
+  color: var(--admin-muted);
+  background: transparent;
+}
+
 @media (max-width: 960px) {
-  #header {
-    padding: 18px 20px;
-  }
-  #content {
-    padding: 18px 18px 24px;
-  }
-  .module,
-  fieldset.module {
-    border-radius: 1rem;
-  }
+  #header { padding: 0 18px; }
+  #content { padding: 22px 18px 30px; }
+  #header::after { right: 18px; left: 18px; }
 }
 
 @media (max-width: 720px) {
-  .nav-sidebar {
-    display: none;
-  }
-  #content {
-    margin-left: 0;
-    padding: 16px;
-  }
-  #header {
-    padding: 14px 16px;
-  }
+  #header { min-height: 64px; }
+  #header .branding { min-height: 64px; }
+  #content { padding: 16px 12px 24px; }
+  #footer { padding: 18px 12px; }
+  .module, fieldset.module { border-radius: 11px; }
+  .module th, .module td { padding: 10px 9px; }
+  body.login #content-main { padding: 22px; }
 }

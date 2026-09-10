@@ -25,16 +25,16 @@ export default function ContactPage() {
 
   return (
     <div className="container section" style={{ maxWidth: 720 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 28, alignItems: 'start' }}>
+      <div className="contact-layout" style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 28, alignItems: 'start' }}>
         <div>
           <h1 style={{ fontSize: 28, marginBottom: 12 }}>Contact the team</h1>
           <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>Send us feedback, ask about instructor approval, or request support for your course.</p>
 
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
-            <input className="input" placeholder={t('yourName')} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-            <input className="input" type="email" placeholder={t('yourEmail')} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} required />
-            <input className="input" placeholder={t('subject')} value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} required />
-            <textarea className="input" rows={5} placeholder={t('message')} value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} required />
+            <input className="input" aria-label={t('yourName')} placeholder={t('yourName')} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+            <input className="input" type="email" aria-label={t('yourEmail')} placeholder={t('yourEmail')} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} required />
+            <input className="input" aria-label={t('subject')} placeholder={t('subject')} value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} required />
+            <textarea className="input" rows={5} aria-label={t('message')} placeholder={t('message')} value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} required />
             <button className="btn btn-primary" type="submit" disabled={status === 'sending'}>
               {status === 'sending' ? 'Sending...' : 'Send message'}
             </button>

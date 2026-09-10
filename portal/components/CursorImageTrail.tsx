@@ -34,28 +34,25 @@ export function CursorImageTrail() {
     const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!canHover || reduceMotion) return;
-    enabledRef.current = true;
+    // Defer decoration until the page is interactive, and load images only when used.
+    const startTimer = window.setTimeout(() => {
+      enabledRef.current = true;
 
-    const container = containerRef.current!;
-    // Create a fixed pool of elements
-    const POOL_SIZE = 8;
-    for (let i = 0; i < POOL_SIZE; i++) {
-      const el = document.createElement("div");
-      el.className = "cursor-trail-item";
-      el.setAttribute("aria-hidden", "true");
-      const img = document.createElement("img");
-      img.className = "cursor-trail-img";
-      img.draggable = false;
-      el.appendChild(img);
-      container.appendChild(el);
-      poolRef.current.push(el);
-    }
-
-    // Preload assets
-    ASSET_PATHS.forEach((p) => {
-      const img = new Image();
-      img.src = p;
-    });
+      const container = containerRef.current!;
+      const POOL_SIZE = 8;
+      for (let i = 0; i < POOL_SIZE; i++) {
+        const el = document.createElement("div");
+        el.className = "cursor-trail-item";
+        el.setAttribute("aria-hidden", "true");
+        const img = document.createElement("img");
+        img.className = "cursor-trail-img";
+        img.loading = "lazy";
+        img.draggable = false;
+        el.appendChild(img);
+        container.appendChild(el);
+        poolRef.current.push(el);
+      }
+    }, 800);
 
     function getDistance(a: any, b: any) {
       const dx = a.x - b.x;
@@ -146,9 +143,10 @@ export function CursorImageTrail() {
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseout", onLeave);
+      window.clearTimeout(startTimer);
       // kill timelines and remove elements
       poolRef.current.forEach((el) => gsap.killTweensOf(el));
-      if (container) container.innerHTML = "";
+      if (containerRef.current) containerRef.current.innerHTML = "";
       enabledRef.current = false;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };

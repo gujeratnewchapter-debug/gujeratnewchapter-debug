@@ -11,5 +11,6 @@ class CertificateSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'certificate_number', 'course', 'course_title', 'student_name',
             'issued_at', 'pdf_file', 'verification_url',
+            'time_taken_seconds',
         ]
         read_only_fields = fields

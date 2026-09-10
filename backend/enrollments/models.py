@@ -8,7 +8,9 @@ def is_lesson_unlocked(student, lesson):
     A lesson is unlocked if:
     - it's the first lesson in the course, OR
     - the previous lesson has no quiz attached, OR
-    - the student has a passing QuizAttempt on the previous lesson's quiz.
+        - the student has a passing QuizAttempt on the previous lesson's quiz, OR
+        - when crossing a module boundary, the student has passed that module's
+            section final quiz.
     This enforces "get 80% to pass and continue to the next lesson, with
     unlimited attempts until passing."
     """
@@ -22,11 +24,20 @@ def is_lesson_unlocked(student, lesson):
 
     previous_lesson = ordered[idx - 1]
     quiz = getattr(previous_lesson, 'quiz', None)
-    if not quiz:
-        return True
-
     from quizzes.models import QuizAttempt
-    return QuizAttempt.objects.filter(quiz=quiz, student=student, passed=True).exists()
+
+    if quiz:
+        return QuizAttempt.objects.filter(quiz=quiz, student=student, passed=True).exists()
+
+    if previous_lesson.section_id != lesson.section_id:
+        final_quiz = previous_lesson.section.quizzes.filter(
+            is_final_exam=True,
+            lesson__isnull=True,
+        ).first()
+        if final_quiz:
+            return QuizAttempt.objects.filter(quiz=final_quiz, student=student, passed=True).exists()
+
+    return True
 
 
 class Enrollment(models.Model):

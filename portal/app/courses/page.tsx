@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { getCourses, getCategories } from '@/lib/api';
 import { CourseCard } from '@/components/CourseCard';
+import { InnovationLoader } from '@/components/InnovationLoader';
 
 function CoursesInner() {
   const searchParams = useSearchParams();
@@ -37,7 +38,7 @@ function CoursesInner() {
     <div className="container section">
       <h1 style={{ fontSize: 26, marginBottom: 20 }}>Explore Courses</h1>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
+      <div className="course-filters" style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
           <Search size={15} style={{ position: 'absolute', left: 12, top: 11, color: 'var(--text-muted)' }} />
           <input className="input" style={{ paddingLeft: 34 }} placeholder="Search startup, marketing, finance..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -55,9 +56,9 @@ function CoursesInner() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+        <InnovationLoader label="Loading courses" />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+        <div className="course-grid" style={{ display: 'grid', gap: 20 }}>
           {courses.map((c: any) => <CourseCard key={c.id} course={c} />)}
           {courses.length === 0 && <p style={{ color: 'var(--text-muted)' }}>No courses match your search.</p>}
         </div>
@@ -68,7 +69,7 @@ function CoursesInner() {
 
 export default function CoursesPage() {
   return (
-    <Suspense fallback={<div className="container section">Loading...</div>}>
+    <Suspense fallback={<div className="container section"><InnovationLoader label="Loading courses" /></div>}>
       <CoursesInner />
     </Suspense>
   );

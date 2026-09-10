@@ -17,6 +17,20 @@ class ConversationSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'mode', 'title', 'messages', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def validate_course(self, course):
+        if course is None:
+            return course
+        request = self.context.get('request')
+        user = request.user if request else None
+        if not user or not user.is_authenticated:
+            raise serializers.ValidationError('Authentication is required for course conversations.')
+        if user.is_super_admin or (user.is_instructor and course.instructor_id == user.id):
+            return course
+        from enrollments.models import Enrollment
+        if course.status != course.Status.PUBLISHED or not Enrollment.objects.filter(student=user, course=course).exists():
+            raise serializers.ValidationError('Enroll in this published course before starting a conversation.')
+        return course
+
 
 class ConversationListSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
@@ -39,3 +53,12 @@ class KnowledgeDocumentSerializer(serializers.ModelSerializer):
         model = KnowledgeDocument
         fields = ['id', 'title', 'source_type', 'course', 'file', 'raw_text', 'version', 'is_indexed', 'uploaded_at']
         read_only_fields = ['id', 'is_indexed', 'uploaded_at']
+
+    def validate_course(self, course):
+        if course is None:
+            return course
+        request = self.context.get('request')
+        user = request.user if request else None
+        if user and (user.is_super_admin or course.instructor_id == user.id):
+            return course
+        raise serializers.ValidationError('You can only attach documents to your own courses.')

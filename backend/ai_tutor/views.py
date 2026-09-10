@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Conversation, Message, KnowledgeDocument
@@ -56,11 +57,17 @@ class KnowledgeDocumentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        if self.request.user.is_super_admin:
+            return qs
+        if self.request.user.is_instructor:
+            return qs.filter(course__instructor=self.request.user)
         if not (self.request.user.is_instructor or self.request.user.is_super_admin):
             qs = qs.none()
         return qs
 
     def perform_create(self, serializer):
+        if not (self.request.user.is_instructor or self.request.user.is_super_admin):
+            raise PermissionDenied('Instructor or admin access required.')
         doc = serializer.save()
         # In production: enqueue a Celery task to chunk + embed doc.raw_text/file
         # into the vector store, then flip is_indexed=True.

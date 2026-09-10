@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SiteSettings, ContactMessage, HeroImage
+from .models import SiteSettings, ContactMessage, HeroImage, PageContent, PageSection
 
 
 class ContactMessageSerializer(serializers.ModelSerializer):
@@ -7,6 +7,26 @@ class ContactMessageSerializer(serializers.ModelSerializer):
         model = ContactMessage
         fields = ['id', 'name', 'email', 'subject', 'message', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class PageContentSerializer(serializers.ModelSerializer):
+    sections = serializers.SerializerMethodField()
+
+    def get_sections(self, obj):
+        return PageSectionSerializer(obj.sections.filter(is_published=True), many=True, context=self.context).data
+
+    class Meta:
+        model = PageContent
+        fields = ['slug', 'title', 'description', 'content', 'sections', 'is_published', 'updated_at']
+        read_only_fields = ['updated_at']
+
+
+class PageSectionSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(read_only=True)
+
+    class Meta:
+        model = PageSection
+        fields = ['key', 'title', 'body', 'image', 'content', 'order']
 
 
 class HeroImageSerializer(serializers.ModelSerializer):

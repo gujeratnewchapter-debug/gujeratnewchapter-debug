@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getCourse, getQuiz, submitQuiz } from '@/lib/api';
+import { InnovationLoader } from '@/components/InnovationLoader';
 
 export default function QuizPage() {
   const { quizId } = useParams<{ quizId: string }>();
@@ -13,6 +14,7 @@ export default function QuizPage() {
   const [result, setResult] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [startedAt] = useState(() => Date.now());
 
   useEffect(() => {
     async function load() {
@@ -81,7 +83,7 @@ export default function QuizPage() {
         selected_choice_ids: responses[q.id]?.choiceIds ?? [],
         text_answer: responses[q.id]?.text ?? '',
       }));
-      const { data } = await submitQuiz(Number(quizId), answers);
+      const { data } = await submitQuiz(Number(quizId), answers, Math.round((Date.now() - startedAt) / 1000));
       setResult(data);
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Could not submit — try again.');
@@ -90,7 +92,7 @@ export default function QuizPage() {
     }
   }
 
-  if (!quiz) return <div className="container section">Loading...</div>;
+  if (!quiz) return <div className="container section"><InnovationLoader label="Loading quiz" /></div>;
 
   if (result) {
     return (

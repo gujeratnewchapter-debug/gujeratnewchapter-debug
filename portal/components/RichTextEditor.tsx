@@ -6,7 +6,10 @@ import StarterKit from '@tiptap/starter-kit';
 import TextStyle from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import TextAlign from '@tiptap/extension-text-align';
-import { Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ListOrdered } from 'lucide-react';
+import {
+  Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ListOrdered,
+  Heading1, Heading2, Heading3, Minus, Quote, LayoutTemplate,
+} from 'lucide-react';
 
 interface Props {
   value: string;
@@ -15,6 +18,17 @@ interface Props {
 }
 
 const SWATCHES = ['#FFFFFF', '#123B5D', '#10B981', '#34D399', '#0F766E', '#F59E0B'];
+
+const STUDY_GUIDE_TEMPLATE = `
+<h2>Why This Exists</h2>
+<p>Introduce the topic and explain why it matters.</p>
+<hr>
+<h2>Article 1 - Short Title</h2>
+<p><strong>Key term:</strong> Define the important concept in clear language.</p>
+<h3>Key Points</h3>
+<ul><li>Summarize the first important rule.</li><li>Summarize the second important rule.</li></ul>
+<blockquote><p><strong>Exam Takeaway</strong><br>State the rule or idea learners should remember.</p></blockquote>
+`;
 
 export function RichTextEditor({ value, onChange, placeholder }: Props) {
   const editor = useEditor({
@@ -43,6 +57,15 @@ export function RichTextEditor({ value, onChange, placeholder }: Props) {
         <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={editor.isActive('italic') ? 'active' : ''} title="Italic">
           <Italic size={15} />
         </button>
+        <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={editor.isActive('heading', { level: 1 }) ? 'active' : ''} title="Title heading">
+          <Heading1 size={15} />
+        </button>
+        <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={editor.isActive('heading', { level: 2 }) ? 'active' : ''} title="Section heading">
+          <Heading2 size={15} />
+        </button>
+        <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={editor.isActive('heading', { level: 3 }) ? 'active' : ''} title="Subheading">
+          <Heading3 size={15} />
+        </button>
         <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'active' : ''} title="Bullet list">
           <List size={15} />
         </button>
@@ -58,6 +81,17 @@ export function RichTextEditor({ value, onChange, placeholder }: Props) {
         <button type="button" onClick={() => editor.chain().focus().setTextAlign('right').run()} className={editor.isActive({ textAlign: 'right' }) ? 'active' : ''} title="Align right">
           <AlignRight size={15} />
         </button>
+        <button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Insert section divider">
+          <Minus size={15} />
+        </button>
+        <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={editor.isActive('blockquote') ? 'active' : ''} title="Exam takeaway callout">
+          <Quote size={15} />
+        </button>
+        {editor.isEmpty && (
+          <button type="button" onClick={() => editor.commands.setContent(STUDY_GUIDE_TEMPLATE)} title="Insert study guide template">
+            <LayoutTemplate size={15} />
+          </button>
+        )}
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', paddingLeft: 6, marginLeft: 4, borderLeft: '1px solid var(--border)' }}>
           {SWATCHES.map((c) => (
             <button

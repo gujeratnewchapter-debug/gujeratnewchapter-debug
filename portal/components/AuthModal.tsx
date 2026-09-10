@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SafeGoogleLogin from './SafeGoogleLogin';
 import { X, Eye, EyeOff, Github } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
+import { getMe } from '@/lib/api';
 
 export function AuthModal({
   onClose,
@@ -18,7 +19,7 @@ export function AuthModal({
   initialReturnTo?: string | null;
 }) {
   const router = useRouter();
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { user, signIn, signUp, signInWithGoogle } = useAuth();
   const { t } = useI18n();
   const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const [tab, setTab] = useState<'signin' | 'signup'>(initialTab);
@@ -31,11 +32,37 @@ export function AuthModal({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const [signInForm, setSignInForm] = useState({ email: '', password: '' });
   const [signUpForm, setSignUpForm] = useState({
     full_name: '', email: '', password: '', confirm_password: '',
   });
+
+  useEffect(() => {
+    const previousActive = document.activeElement as HTMLElement | null;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !modalRef.current) return;
+      const focusable = Array.from(modalRef.current.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href]')).filter((element) => !element.hasAttribute('disabled'));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+    modalRef.current?.querySelector<HTMLElement>('input, button')?.focus();
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleKeyDown);
+      previousActive?.focus();
+    };
+  }, [onClose]);
 
   React.useEffect(() => {
     setTab(initialTab);
@@ -56,8 +83,18 @@ export function AuthModal({
     onClose();
   }
 
-  function routeAfterAuth() {
-    const target = returnTo || '/courses';
+  async function routeAfterAuth() {
+    let authenticatedRole: 'student' | 'instructor' | 'super_admin' = 'student';
+    try {
+      const { data } = await getMe();
+      authenticatedRole = data.role || authenticatedRole;
+    } catch {
+      // A failed profile lookup must never grant the instructor route.
+    }
+    const isInstructorBuilderPath = returnTo?.startsWith('/instructor/courses');
+    const target = authenticatedRole === 'instructor'
+      ? (returnTo || '/instructor/courses/new')
+      : (returnTo && !isInstructorBuilderPath ? returnTo : '/dashboard');
     handleClose();
     setTimeout(() => router.push(target), 120);
   }
@@ -70,7 +107,7 @@ export function AuthModal({
     try {
       await signIn(signInForm.email.trim(), signInForm.password);
       setSignInForm({ email: '', password: '' });
-      routeAfterAuth();
+      await routeAfterAuth();
     } catch (err: any) {
       setError(err?.message || 'Invalid email or password.');
     } finally {
@@ -143,7 +180,7 @@ export function AuthModal({
     try {
       // Exchange the Google ID token with Supabase for direct sign-in
       await signInWithGoogle(credential);
-      routeAfterAuth();
+      await routeAfterAuth();
     } catch (err: any) {
       setError(err?.message || 'Google sign-in failed.');
     } finally {
@@ -196,8 +233,9 @@ export function AuthModal({
       onClick={handleClose}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
     >
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: 440, maxWidth: '100%', position: 'relative', zIndex: 200001 }}>
-        <button onClick={handleClose} style={{ position: 'absolute', top: 14, right: 14, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+      <div ref={modalRef} onClick={(e) => e.stopPropagation()} className="card auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" style={{ width: 440, maxWidth: '100%', position: 'relative', zIndex: 200001 }}>
+        <h2 id="auth-modal-title" className="sr-only">{tab === 'signin' ? t('signIn') : t('signUp')}</h2>
+        <button type="button" onClick={handleClose} aria-label="Close sign-in dialog" style={{ position: 'absolute', top: 14, right: 14, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
           <X size={18} />
         </button>
 
@@ -256,11 +294,9 @@ export function AuthModal({
           <>
             <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>
             {/* Provide an extra troubleshooting hint when Google Identity reports origin/403 errors. */}
-            {error.toLowerCase().includes('origin') || error.toLowerCase().includes('not allowed') || error.toLowerCase().includes('403') ? (
+            {error.toLowerCase().includes('google') || error.toLowerCase().includes('origin') || error.toLowerCase().includes('not allowed') || error.toLowerCase().includes('403') ? (
               <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 8 }}>
-                Google sign-in origin not allowed. Add your dev origin (e.g. <strong>http://localhost:3004</strong>) as an
-                authorized JavaScript origin in the Google Cloud Console for your OAuth client and add the
-                Google Client ID/Secret to Supabase Authentication → Providers → Google.
+                Add <strong>http://localhost:3000</strong> as an authorized JavaScript origin in Google Cloud Console for this OAuth client. If using the Supabase OAuth path, also enable Google under Supabase Authentication → Providers.
               </p>
             ) : null}
           </>
@@ -272,7 +308,7 @@ export function AuthModal({
             <input className="input" type="email" placeholder="Email" value={signInForm.email} onChange={(e) => setSignInForm((f) => ({ ...f, email: e.target.value }))} required suppressHydrationWarning />
             <div style={{ position: 'relative' }}>
               <input className="input" type={showPassword ? 'text' : 'password'} placeholder="Password" value={signInForm.password} onChange={(e) => setSignInForm((f) => ({ ...f, password: e.target.value }))} required suppressHydrationWarning />
-              <button type="button" onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -309,13 +345,13 @@ export function AuthModal({
             <input className="input" type="email" placeholder="Email" value={signUpForm.email} onChange={(e) => setSignUpForm((f) => ({ ...f, email: e.target.value }))} required suppressHydrationWarning />
             <div style={{ position: 'relative' }}>
               <input className="input" type={showPassword ? 'text' : 'password'} placeholder="Password" value={signUpForm.password} onChange={(e) => setSignUpForm((f) => ({ ...f, password: e.target.value }))} required suppressHydrationWarning />
-              <button type="button" onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
             <div style={{ position: 'relative' }}>
               <input className="input" type={showConfirmPassword ? 'text' : 'password'} placeholder="Confirm password" value={signUpForm.confirm_password} onChange={(e) => setSignUpForm((f) => ({ ...f, confirm_password: e.target.value }))} required suppressHydrationWarning />
-              <button type="button" onClick={() => setShowConfirmPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button type="button" aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'} onClick={() => setShowConfirmPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>

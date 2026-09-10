@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from certificates.models import Certificate
 from certificates.views import generate_certificate_pdf
 from .models import Quiz, Question, Choice, QuizAttempt, Answer
+from courses.models import Course
 from .serializers import (
     QuizSerializer, QuizInstructorSerializer, QuizSubmitSerializer, QuizAttemptResultSerializer,
     QuestionWriteSerializer, ChoiceWriteSerializer,
@@ -78,6 +79,13 @@ class QuizViewSet(viewsets.ModelViewSet):
         lesson_id = self.request.query_params.get('lesson')
         if lesson_id:
             qs = qs.filter(lesson_id=lesson_id)
+        user = self.request.user
+        if not _is_instructor_like(user):
+            qs = qs.filter(course__status=Course.Status.PUBLISHED)
+            if not user.is_authenticated:
+                qs = qs.filter(lesson__is_preview=True)
+            else:
+                qs = qs.filter(course__enrollments__student=user).distinct()
         return qs
 
     def get_permissions(self):
@@ -94,6 +102,18 @@ class QuizViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         quiz = self.get_object()
+
+        from enrollments.models import Enrollment
+        if not Enrollment.objects.filter(student=request.user, course=quiz.course).exists():
+            return Response({'detail': 'Enroll in this course before attempting its quizzes.'}, status=403)
+
+        previous_attempts = quiz.attempts.filter(student=request.user).count()
+        if quiz.max_attempts and previous_attempts >= quiz.max_attempts:
+            return Response({'detail': 'You have used all allowed attempts for this quiz.'}, status=403)
+
+        duration_seconds = max(0, int(request.data.get('duration_seconds', 0) or 0))
+        if quiz.time_limit_minutes and duration_seconds > quiz.time_limit_minutes * 60:
+            return Response({'detail': 'The quiz time limit was exceeded.'}, status=400)
 
         if quiz.lesson_id:
             from enrollments.models import is_lesson_unlocked
@@ -132,7 +152,7 @@ class QuizViewSet(viewsets.ModelViewSet):
         serializer = QuizSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        attempt = QuizAttempt.objects.create(quiz=quiz, student=request.user)
+        attempt = QuizAttempt.objects.create(quiz=quiz, student=request.user, duration_seconds=duration_seconds)
         total_points = 0
         earned_points = 0
 
@@ -168,7 +188,30 @@ class QuizViewSet(viewsets.ModelViewSet):
         attempt.submitted_at = timezone.now()
         attempt.save()
 
-        if attempt.passed and quiz.is_final_exam and quiz.course_id and not quiz.section_id:
+        if attempt.passed and quiz.lesson_id:
+            from enrollments.models import Enrollment, LessonProgress
+            enrollment, _ = Enrollment.objects.get_or_create(student=request.user, course=quiz.course)
+            LessonProgress.objects.update_or_create(
+                enrollment=enrollment,
+                lesson=quiz.lesson,
+                defaults={'is_completed': True, 'completed_at': timezone.now()},
+            )
+            total_lessons = quiz.course.ordered_lessons()
+            completed_lessons = LessonProgress.objects.filter(
+                enrollment=enrollment, is_completed=True,
+            ).count()
+            enrollment.progress_percent = int((completed_lessons / len(total_lessons)) * 100) if total_lessons else 0
+            enrollment.save(update_fields=['progress_percent'])
+
+        is_course_completion_exam = False
+        if attempt.passed and quiz.is_final_exam and quiz.course_id:
+            if not quiz.section_id:
+                is_course_completion_exam = True
+            else:
+                last_section = quiz.course.sections.order_by('-order').first()
+                is_course_completion_exam = bool(last_section and last_section.id == quiz.section_id)
+
+        if is_course_completion_exam:
             from enrollments.models import Enrollment
             enrollment, _ = Enrollment.objects.get_or_create(student=request.user, course=quiz.course)
             enrollment.progress_percent = 100
@@ -176,6 +219,7 @@ class QuizViewSet(viewsets.ModelViewSet):
             enrollment.save()
 
             certificate, _ = Certificate.objects.get_or_create(student=request.user, course=quiz.course)
+            certificate.time_taken_seconds = attempt.duration_seconds
             certificate.verification_url = f"{settings.FRONTEND_BASE_URL}/verify-certificate/{certificate.certificate_number}"
             if not certificate.pdf_file:
                 pdf_buffer = generate_certificate_pdf(certificate)

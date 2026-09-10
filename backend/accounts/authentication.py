@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
 import jwt
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -25,9 +29,25 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         token = auth[1].decode('utf-8')
 
         try:
+            token_claims = jwt.decode(token, options={'verify_signature': False})
+        except Exception:
+            return None
+
+        is_simple_jwt = (
+            token_claims.get('token_type') == 'access'
+            and token_claims.get('user_id') is not None
+            and token_claims.get('aud') != 'authenticated'
+        )
+        if is_simple_jwt:
+            return None
+
+        try:
             payload = self._decode_token(token)
-        except Exception as exc:  # pragma: no cover - DRF will surface the message
-            raise AuthenticationFailed('Invalid or expired authentication token.') from exc
+        except Exception:
+            payload = self._fetch_supabase_user(token)
+
+        if not payload:
+            raise AuthenticationFailed('Invalid or expired authentication token.')
 
         sub = payload.get('sub')
         email = payload.get('email')
@@ -64,6 +84,34 @@ class SupabaseJWTAuthentication(BaseAuthentication):
 
         return (user, token)
 
+    def _fetch_supabase_user(self, token):
+        """Let Supabase validate tokens when local JWT verification is unavailable."""
+        supabase_url = getattr(settings, 'SUPABASE_URL', '')
+        anon_key = getattr(settings, 'SUPABASE_ANON_KEY', '')
+        if not supabase_url or not anon_key:
+            return None
+
+        request = Request(
+            f'{supabase_url}/auth/v1/user',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'apikey': anon_key,
+            },
+        )
+        try:
+            with urlopen(request, timeout=5) as response:
+                user_data = json.loads(response.read().decode('utf-8'))
+        except (HTTPError, URLError, ValueError, TimeoutError):
+            return None
+
+        if not user_data.get('id'):
+            return None
+        return {
+            'sub': user_data['id'],
+            'email': user_data.get('email'),
+            'user_metadata': user_data.get('user_metadata') or {},
+        }
+
     def _decode_token(self, token):
         if getattr(settings, 'SUPABASE_JWT_SECRET', ''):
             return jwt.decode(
@@ -79,10 +127,14 @@ class SupabaseJWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed('Supabase JWT verification is not configured on the server.')
 
         signing_key = jwt.PyJWKClient(jwks_url).get_signing_key_from_jwt(token)
+        algorithm = jwt.get_unverified_header(token).get('alg')
+        if not algorithm:
+            raise AuthenticationFailed('Supabase token has no signing algorithm.')
+
         return jwt.decode(
             token,
             signing_key.key,
-            algorithms=['RS256'],
+            algorithms=[algorithm],
             audience='authenticated',
             options={'verify_aud': True},
         )

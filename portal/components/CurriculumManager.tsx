@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { RichTextEditor } from './RichTextEditor';
 import * as api from '@/lib/api';
+import { InnovationLoader } from '@/components/InnovationLoader';
 
 interface ChoiceEdit { id: number; text: string; is_correct: boolean; order: number }
 interface QuestionEdit { id: number; text: string; choices: ChoiceEdit[] }
@@ -138,7 +139,7 @@ export function CurriculumManager({ courseId, initialSections }: { courseId: num
     patchLesson(sectionId, lesson.id, { quiz: { ...lesson.quiz, questions: updatedQuestions } });
   }
 
-  if (loading || !sections) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading curriculum...</p>;
+  if (loading || !sections) return <InnovationLoader label="Loading curriculum" />;
 
   return (
     <div>

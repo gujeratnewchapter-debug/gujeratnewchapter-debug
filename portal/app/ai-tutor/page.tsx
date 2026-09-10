@@ -2,163 +2,31 @@
 
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Send, GraduationCap, Rocket, LineChart, RotateCcw } from 'lucide-react';
+import { Menu, MessageSquare, Plus, Send, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { createConversation, sendAIMessage } from '@/lib/api';
+import { createConversation, deleteConversation, getConversation, getConversations, sendAIMessage } from '@/lib/api';
+import { ChatBubble } from '@/components/ChatBubble';
+import { InnovationLoader } from '@/components/InnovationLoader';
 
 const MODES = [
-  { key: 'tutor', label: 'AI Tutor', icon: GraduationCap, desc: 'Explain concepts, summarize lessons, generate quizzes',
-    prompts: ['Explain this lesson in simpler terms', 'Quiz me on what I just learned', 'Summarize this course so far'] },
-  { key: 'mentor', label: 'AI Startup Mentor', icon: Rocket, desc: 'Fundraising, pitch decks, lean startup, market research',
-    prompts: ['How do I validate my startup idea?', 'What goes into a seed-stage pitch deck?', 'How do I run customer discovery interviews?'] },
-  { key: 'coach', label: 'AI Business Coach', icon: LineChart, desc: 'Business plans, financial projections, SWOT analysis',
-    prompts: ['Help me draft a lean business plan', 'Run a SWOT analysis for my idea', 'What should my financial projections include?'] },
+  { key: 'tutor', label: 'AI Tutor', desc: 'Explain concepts, summarize lessons, and generate quizzes' },
+  { key: 'mentor', label: 'AI Startup Mentor', desc: 'Fundraising, pitch decks, lean startup, and market research' },
+  { key: 'coach', label: 'AI Business Coach', desc: 'Business plans, projections, SWOT analysis, and growth' },
 ];
+type Conversation = { id: number; mode: string; title: string; last_message?: string; updated_at: string };
 
 function AITutorInner() {
-  const { isAuthenticated } = useAuth();
-  const searchParams = useSearchParams();
-  const courseId = searchParams.get('course');
-  const [mode, setMode] = useState('tutor');
-  const [conversationId, setConversationId] = useState<number | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const activeMode = MODES.find((m) => m.key === mode)!;
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, sending]);
-
-  async function startConversation(selectedMode: string) {
-    setMode(selectedMode);
-    setMessages([]);
-    setConversationId(null);
-    if (!isAuthenticated) return;
-    const label = MODES.find((m) => m.key === selectedMode)?.label ?? '';
-    const { data } = await createConversation(selectedMode, label, courseId ? Number(courseId) : undefined);
-    setConversationId(data.id);
-    setMessages(data.messages ?? []);
-  }
-
-  async function sendText(text: string) {
-    if (!text.trim() || !isAuthenticated) return;
-    const userMsg = { id: `local-${Date.now()}`, role: 'user', content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput('');
-    setSending(true);
-    try {
-      let convId = conversationId;
-      if (!convId) {
-        const { data } = await createConversation(mode, activeMode.label, courseId ? Number(courseId) : undefined);
-        convId = data.id;
-        setConversationId(convId);
-      }
-      const { data } = await sendAIMessage(convId!, text);
-      setMessages((prev) => [...prev, data]);
-    } finally {
-      setSending(false);
-    }
-  }
-
-  function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    sendText(input);
-  }
-
-  return (
-    <div className="container section" style={{ maxWidth: 760 }}>
-      <h1 style={{ fontSize: 26, marginBottom: 6 }}>AI Assistant</h1>
-      <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
-        Ask about startups, business models, fundraising, pitch decks, or anything in your courses.
-      </p>
-
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        {MODES.map((m) => (
-          <button
-            key={m.key}
-            onClick={() => startConversation(m.key)}
-            className="btn"
-            style={{
-              background: mode === m.key ? 'var(--brand)' : 'var(--surface-2)',
-              color: mode === m.key ? '#fff' : 'var(--text)',
-              flex: '1 1 180px', justifyContent: 'flex-start', gap: 10,
-            }}
-          >
-            <m.icon size={16} /> {m.label}
-          </button>
-        ))}
-      </div>
-
-      {!isAuthenticated ? (
-        <div className="card" style={{ textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-muted)' }}>Sign in to start chatting with the AI Assistant.</p>
-        </div>
-      ) : (
-        <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 540 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{activeMode.desc}</p>
-            {messages.length > 0 && (
-              <button className="btn" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => startConversation(mode)}>
-                <RotateCcw size={12} /> New chat
-              </button>
-            )}
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {messages.length === 0 && (
-              <div style={{ textAlign: 'center', marginTop: 24 }}>
-                <activeMode.icon size={28} color="var(--brand)" style={{ marginBottom: 12 }} />
-                <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>
-                  Ask your first question, or try one of these:
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 440, margin: '0 auto' }}>
-                  {activeMode.prompts.map((p) => (
-                    <button key={p} className="btn" style={{ textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => sendText(p)}>
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {messages.map((m: any) => (
-              <div
-                key={m.id}
-                style={{
-                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  background: m.role === 'user' ? 'var(--brand)' : 'var(--surface-2)',
-                  color: m.role === 'user' ? '#fff' : 'var(--text)',
-                  padding: '10px 14px', borderRadius: 14, maxWidth: '80%', fontSize: 14, lineHeight: 1.5,
-                }}
-              >
-                {m.content}
-                {m.sources?.length > 0 && (
-                  <p style={{ fontSize: 11, color: 'var(--accent)', marginTop: 6 }}>Sources: {m.sources.map((s: any) => s.title).join(', ')}</p>
-                )}
-              </div>
-            ))}
-            {sending && (
-              <div style={{ alignSelf: 'flex-start', background: 'var(--surface-2)', padding: '10px 14px', borderRadius: 14, display: 'flex', gap: 4 }}>
-                <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
-              </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
-          <form onSubmit={handleSend} style={{ display: 'flex', gap: 8, padding: 14, borderTop: '1px solid var(--border)' }}>
-            <input className="input" placeholder="Ask a question..." value={input} onChange={(e) => setInput(e.target.value)} disabled={sending} />
-            <button className="btn btn-primary" type="submit" disabled={sending || !input.trim()}><Send size={15} /></button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
+  const { isAuthenticated } = useAuth(); const searchParams = useSearchParams(); const courseId = searchParams.get('course'); const requestedMode = searchParams.get('mode');
+  const [mode, setMode] = useState(['tutor', 'mentor', 'coach'].includes(requestedMode ?? '') ? requestedMode as string : 'tutor'); const [conversationId, setConversationId] = useState<number | null>(null); const [history, setHistory] = useState<Conversation[]>([]); const [messages, setMessages] = useState<any[]>([]); const [input, setInput] = useState(''); const [sending, setSending] = useState(false); const [loadingHistory, setLoadingHistory] = useState(false); const [chatError, setChatError] = useState(''); const [sidebarOpen, setSidebarOpen] = useState(true); const bottomRef = useRef<HTMLDivElement>(null); const activeMode = MODES.find((item) => item.key === mode) ?? MODES[0];
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, sending]);
+  useEffect(() => { if (!isAuthenticated) return; setLoadingHistory(true); getConversations().then(({ data }) => setHistory(data.results ?? data)).catch(() => setChatError('Could not load chat history.')).finally(() => setLoadingHistory(false)); }, [isAuthenticated]);
+  async function openConversation(conversation: Conversation) { const { data } = await getConversation(conversation.id); setConversationId(data.id); setMode(data.mode); setMessages(data.messages ?? []); setSidebarOpen(false); }
+  function newChat(selectedMode = mode) { setMode(selectedMode); setConversationId(null); setMessages([]); setInput(''); setChatError(''); setSidebarOpen(false); }
+  async function removeConversation(event: React.MouseEvent, id: number) { event.stopPropagation(); await deleteConversation(id); setHistory((items) => items.filter((item) => item.id !== id)); if (conversationId === id) newChat(); }
+  async function sendText(text: string) { if (!text.trim() || !isAuthenticated || sending) return; setMessages((items) => [...items, { id: `local-${Date.now()}`, role: 'user', content: text }]); setInput(''); setSending(true); setChatError(''); try { let id = conversationId; if (!id) { const created = await createConversation(mode, activeMode.label, courseId ? Number(courseId) : undefined); id = created.data.id; setConversationId(id); setHistory((items) => [{ ...created.data, last_message: text }, ...items]); } if (!id) throw new Error('Conversation could not be created'); const { data } = await sendAIMessage(id, text); setMessages((items) => [...items, data]); setHistory((items) => items.map((item) => item.id === id ? { ...item, last_message: text, updated_at: new Date().toISOString() } : item)); } catch (error: any) { setChatError(error?.response ? 'The AI service is temporarily unavailable.' : 'The AI assistant could not reach the backend.'); } finally { setSending(false); } }
+  function submit(event: React.FormEvent) { event.preventDefault(); sendText(input); }
+  if (!isAuthenticated) return <div className="container section"><div className="card ai-login-state"><h1>AI Assistant</h1><p className="muted">Sign in to start chatting and save your conversation history.</p></div></div>;
+  return <div className="ai-workspace"><aside className={`ai-sidebar ${sidebarOpen ? 'is-open' : ''}`}><div className="ai-sidebar-head"><strong>AI workspace</strong><button className="ai-icon-button" onClick={() => setSidebarOpen(false)} aria-label="Close chat history"><X size={17} /></button></div><button className="ai-new-chat" onClick={() => newChat()}><Plus size={17} /> New chat</button><p className="ai-sidebar-label">Recent chats</p><div className="ai-history" aria-label="Chat history">{loadingHistory && <p className="muted ai-history-empty">Loading history...</p>}{!loadingHistory && history.length === 0 && <p className="muted ai-history-empty">Your conversations will appear here.</p>}{history.map((conversation) => <div className={`ai-history-item ${conversation.id === conversationId ? 'active' : ''}`} key={conversation.id} onClick={() => openConversation(conversation)} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && openConversation(conversation)}><MessageSquare size={15} /><span><strong>{conversation.title || 'New conversation'}</strong><small>{conversation.last_message || 'No messages yet'}</small></span><button className="ai-delete-button" onClick={(event) => removeConversation(event, conversation.id)} aria-label={`Delete ${conversation.title || 'conversation'}`}><Trash2 size={14} /></button></div>)}</div><div className="ai-sidebar-foot"><span className="ai-status-dot" /> Conversations are private to your account</div></aside><main className="ai-chat-panel"><header className="ai-chat-head"><button className="ai-icon-button ai-mobile-only" onClick={() => setSidebarOpen(true)} aria-label="Open chat history"><Menu size={19} /></button><div><strong>{activeMode.label}</strong><span>{activeMode.desc}</span></div><button className="ai-new-chat ai-head-new" onClick={() => newChat()}><Plus size={16} /> New chat</button></header><div className="ai-mode-tabs">{MODES.map((item) => <button key={item.key} className={mode === item.key ? 'active' : ''} onClick={() => newChat(item.key)}>{item.label}</button>)}</div><div className="ai-messages">{messages.length === 0 && <div className="ai-empty-state"><div className="ai-mark"><MessageSquare size={22} /></div><h1>What can I help you build?</h1><p className="muted">Ask about your course, startup idea, customers, market, funding, or next step.</p><div className="ai-prompt-grid">{['Explain this concept simply', 'Help me validate my startup idea', 'Draft a lean business plan', 'Run a SWOT analysis'].map((prompt) => <button key={prompt} onClick={() => sendText(prompt)}>{prompt}</button>)}</div></div>}{messages.map((message) => <ChatBubble key={message.id} role={message.role} content={message.content} sources={message.sources} />)}{sending && <div className="ai-thinking"><span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /></div>}<div ref={bottomRef} /></div><form className="ai-composer" onSubmit={submit}><input className="input" placeholder="Message the AI assistant..." value={input} onChange={(event) => setInput(event.target.value)} disabled={sending} /><button className="btn btn-primary" type="submit" disabled={sending || !input.trim()} aria-label="Send message"><Send size={16} /></button><small>AI can make mistakes. Verify important information.</small></form>{chatError && <p className="ai-error">{chatError}</p>}</main></div>;
 }
 
-export default function AITutorPage() {
-  return (
-    <Suspense fallback={<div className="container section">Loading...</div>}>
-      <AITutorInner />
-    </Suspense>
-  );
-}
+export default function AITutorPage() { return <Suspense fallback={<div className="container section"><InnovationLoader label="Loading AI workspace" /></div>}><AITutorInner /></Suspense>; }

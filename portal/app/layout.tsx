@@ -3,8 +3,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { TechVisuals } from '@/components/TechVisuals';
 import CursorImageTrail from '@/components/CursorImageTrail';
+import { PlatformStatsPopup } from '@/components/PlatformStatsPopup';
 
 export const metadata: Metadata = {
   title: 'Ethiopian Startup School',
@@ -20,8 +20,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body suppressHydrationWarning>
         <Providers>
           <div className="app-shell">
-            <TechVisuals className="global-tech-visuals" />
             <CursorImageTrail />
+            <PlatformStatsPopup />
             <Navbar />
             <main style={{ minHeight: '70vh' }}>{children}</main>
             <div className="woven-band" />

@@ -9,14 +9,24 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class ResourceSerializer(serializers.ModelSerializer):
+    file = serializers.SerializerMethodField()
+
     class Meta:
         model = Resource
-        fields = ['id', 'title', 'file']
+        fields = ['id', 'lesson', 'title', 'resource_type', 'url', 'file', 'order']
+        read_only_fields = ['id']
+
+    def get_file(self, obj):
+        request = self.context.get('request')
+        if not obj.file:
+            return None
+        return request.build_absolute_uri(obj.file.url) if request else obj.file.url
 
 
 class LessonSerializer(serializers.ModelSerializer):
     resources = ResourceSerializer(many=True, read_only=True)
     is_unlocked = serializers.SerializerMethodField()
+    file = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
@@ -25,21 +35,32 @@ class LessonSerializer(serializers.ModelSerializer):
             'file', 'duration_minutes', 'is_preview', 'is_downloadable', 'resources', 'is_unlocked',
         ]
 
+    def validate_content_text(self, value):
+        from .sanitization import sanitize_rich_text
+        return sanitize_rich_text(value)
+
     def get_is_unlocked(self, obj):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return obj.is_preview
         from enrollments.models import is_lesson_unlocked
         return is_lesson_unlocked(request.user, obj)
+
+    def get_file(self, obj):
+        request = self.context.get('request')
+        if not obj.file:
+            return None
+        return request.build_absolute_uri(obj.file.url) if request else obj.file.url
 
 
 class LessonSlimSerializer(serializers.ModelSerializer):
     """Used inside section/course lists - no heavy content field."""
     is_unlocked = serializers.SerializerMethodField()
+    resources = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
-        fields = ['id', 'title', 'lesson_type', 'order', 'duration_minutes', 'is_preview', 'is_unlocked']
+        fields = ['id', 'title', 'lesson_type', 'order', 'video_url', 'duration_minutes', 'is_preview', 'is_unlocked', 'resources']
 
     def get_is_unlocked(self, obj):
         request = self.context.get('request')
@@ -47,6 +68,46 @@ class LessonSlimSerializer(serializers.ModelSerializer):
             return obj.is_preview
         from enrollments.models import is_lesson_unlocked
         return is_lesson_unlocked(request.user, obj)
+
+    def get_resources(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            if not obj.is_preview:
+                return []
+        elif not (
+            request.user.is_super_admin
+            or obj.section.course.instructor_id == request.user.id
+        ):
+            from enrollments.models import Enrollment, is_lesson_unlocked
+            if not obj.is_preview and (
+                not Enrollment.objects.filter(student=request.user, course=obj.section.course).exists()
+                or not is_lesson_unlocked(request.user, obj)
+            ):
+                return []
+        return ResourceSerializer(obj.resources.all(), many=True, context=self.context).data
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user = request.user if request else None
+        privileged = bool(
+            user and user.is_authenticated and (
+                user.is_super_admin or instance.section.course.instructor_id == user.id
+            )
+        )
+        accessible = bool(instance.is_preview)
+        if user and user.is_authenticated and not privileged:
+            from enrollments.models import Enrollment, is_lesson_unlocked
+            accessible = Enrollment.objects.filter(
+                student=user, course=instance.section.course,
+            ).exists() and is_lesson_unlocked(user, instance)
+
+        if not privileged and not accessible:
+            data.pop('id', None)
+            data.pop('video_url', None)
+            data.pop('resources', None)
+            data['is_unlocked'] = False
+        return data
 
 
 class SectionSerializer(serializers.ModelSerializer):
@@ -129,3 +190,11 @@ class CourseWriteSerializer(serializers.ModelSerializer):
             'notes_enabled', 'learning_objectives', 'requirements', 'target_audience', 'tags',
             'category', 'level', 'status', 'thumbnail', 'price', 'is_free', 'language', 'duration_hours',
         ]
+
+    def validate_description(self, value):
+        from .sanitization import sanitize_rich_text
+        return sanitize_rich_text(value)
+
+    def validate_notes(self, value):
+        from .sanitization import sanitize_rich_text
+        return sanitize_rich_text(value)

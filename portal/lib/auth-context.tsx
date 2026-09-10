@@ -112,7 +112,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session) {
         setSupabaseSessionAvailable(true);
         setUser(normalizeSupabaseUser(session.user));
-        setIsLoading(false);
+        try {
+          const { data: sessionData } = await api.syncSupabaseSession(session.access_token);
+          if (!mounted) return;
+          setDjangoAuthToken(sessionData.access);
+          setUser(sessionData.user as User);
+          setTokenRefresh(prev => prev + 1);
+        } catch {
+          if (mounted) {
+            clearDjangoAuthToken();
+            setSupabaseSessionAvailable(false);
+            setUser(null);
+          }
+        } finally {
+          if (mounted) setIsLoading(false);
+        }
         return;
       }
 
@@ -163,7 +177,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signIn(email: string, password: string) {
     const normalizedEmail = email.trim();
 
+    async function syncSupabaseSession() {
+      const { data: firstSession } = await supabase.auth.getSession();
+      let accessToken = firstSession.session?.access_token;
+      if (!accessToken) throw new Error('No active session');
+
+      try {
+        return await api.syncSupabaseSession(accessToken);
+      } catch (syncError: any) {
+        if (syncError?.response?.status !== 401 && syncError?.response?.status !== 403) throw syncError;
+
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshed.session?.access_token) throw syncError;
+        accessToken = refreshed.session.access_token;
+        return api.syncSupabaseSession(accessToken);
+      }
+    }
+
     try {
+      // Remove stale Django credentials before starting a fresh Supabase login.
+      clearDjangoAuthToken();
       const res = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
       const error = (res as any)?.error;
 
@@ -174,18 +207,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (isCredentialFailure) {
           try {
-            const backendRes = await api.login(normalizedEmail, password);
-            const accessToken = backendRes?.data?.access;
-
+            const { data: { session } } = await supabase.auth.getSession();
+            const accessToken = session?.access_token;
             if (accessToken) {
-              setDjangoAuthToken(accessToken);
-              const { data: profile } = await api.getMe();
-              setUser(profile as User);
-              setTokenRefresh(prev => prev + 1); // Trigger re-render to update hasValidDjangoSession
+              const { data: sessionData } = await syncSupabaseSession();
+              setDjangoAuthToken(sessionData.access);
+              setUser(sessionData.user as User);
+              setTokenRefresh(prev => prev + 1);
               return;
-            } else {
-              throw new Error('No access token returned from backend login');
             }
+
+            // Keep legacy Django accounts usable when Supabase has no session.
+            const backendRes = await api.login(normalizedEmail, password);
+            const backendToken = backendRes?.data?.access;
+            if (!backendToken) throw new Error('No access token returned from backend login');
+            setDjangoAuthToken(backendToken);
+            const { data: profile } = await api.getMe();
+            setUser(profile as User);
+            setTokenRefresh(prev => prev + 1);
+            return;
           } catch (backendErr: any) {
             const backendMsg = backendErr?.response?.data?.detail || backendErr?.message || 'Backend login failed';
             throw new Error(`Authentication failed: ${backendMsg}`);
@@ -197,26 +237,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const backendRes = await api.login(normalizedEmail, password);
-        const accessToken = backendRes?.data?.access;
-        if (accessToken) {
-          setDjangoAuthToken(accessToken);
-          const { data: profile } = await api.getMe();
-          setUser(profile as User);
-          setTokenRefresh(prev => prev + 1);
-          return;
-        }
+        const accessToken = res.data?.session?.access_token;
+        if (!accessToken) throw new Error('No Supabase session token returned');
+
+        const { data: sessionData } = await syncSupabaseSession();
+        setDjangoAuthToken(sessionData.access);
+        setUser(sessionData.user as User);
+        setTokenRefresh(prev => prev + 1);
+        return;
       } catch (backendErr: any) {
-        console.error('Supabase login succeeded but backend session sync failed:', backendErr);
-        const backendMsg = backendErr?.response?.data?.detail || backendErr?.message || 'Backend session sync failed.';
-        throw new Error(`Authentication failed: ${backendMsg}`);
+        clearDjangoAuthToken();
+        throw new Error('Sign-in is temporarily unavailable. Please try again.');
       }
 
       const { data: { session } } = await supabase.auth.getSession();
       setSupabaseSessionAvailable(Boolean(session));
       setUser(normalizeSupabaseUser(session?.user ?? null));
     } catch (err: any) {
-      console.error('Error during signIn:', err, 'response:', err?.response ?? null);
       if (err?.response?.status === 400 || err?.status === 400) {
         throw new Error('Sign-in failed: invalid credentials or request. Check email/password and verify your email.');
       }
@@ -249,28 +286,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } catch (backendErr) {
-          console.warn('Backend Google login failed; trying Supabase only if the provider is enabled:', backendErr);
-
-          try {
-            const { data, error } = await (supabase as any).auth.signInWithIdToken({ provider: 'google', token: idToken });
-            if (!error && data) {
-              const nextUser = normalizeSupabaseUser(data?.user ?? null);
-              setUser(nextUser);
-              setSupabaseSessionAvailable(true);
-              return;
-            }
-
-            if (error && isProviderDisabledError(error)) {
-              throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
-            }
-
-            if (error) throw error;
-          } catch (supabaseErr) {
-            if (isProviderDisabledError(supabaseErr)) {
-              throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
-            }
-            throw supabaseErr;
-          }
+          console.warn('Backend Google login failed:', backendErr);
+          throw new Error(
+            'Google sign-in could not verify this credential. Add http://localhost:3000 to the Google OAuth client Authorized JavaScript origins, then try again.'
+          );
         }
       }
 
