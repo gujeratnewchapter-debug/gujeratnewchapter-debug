@@ -41,3 +41,18 @@ Thumbs.db
 
 # Auto-generated files
 portal/AGENTS.md
+
+# Local Compose secrets
+/.env.compose
+/.env.compose.*
+!/.env.compose.example
+
+# Root-level environment files and secrets
+/.env
+/.env.*
+!/.env.example
+!/.env.*.example
+
+# Safe backend environment examples
+!backend/.env.example
+!backend/.env.production.example
