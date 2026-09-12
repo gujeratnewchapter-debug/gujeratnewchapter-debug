@@ -1,14 +1,25 @@
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path, include
 from django.conf import settings
 from django.views.static import serve
 from django.views.generic.base import RedirectView
+
+
+def api_root(request):
+    return JsonResponse({
+        'name': 'Ethiopian Startup School API',
+        'status': 'ok',
+        'health': '/health/',
+        'courses': '/api/courses/',
+    })
 
 admin.site.site_header = 'Ethiopian Startup School Admin'
 admin.site.site_title = 'Ethiopian Startup School'
 admin.site.index_title = 'Platform dashboard'
 
 urlpatterns = [
+    path('', api_root, name='api-root'),
     path('admin/', admin.site.urls),
     path('health/', include('config.health_urls')),
     # Serve a simple favicon for browsers requesting /favicon.ico
