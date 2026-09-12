@@ -23,10 +23,9 @@ urlpatterns = [
     path('api/platform/', include('ess_platform.urls')),
 ]
 
-# Media is stored on a persistent Coolify volume. This route is intentionally
-# independent of DEBUG so production never relies on development-only media
-# serving behavior.
-if settings.MEDIA_URL.startswith('/'):
+# Local development serves filesystem media. Production returns Supabase
+# Storage URLs through the configured S3-compatible storage backend.
+if settings.MEDIA_URL.startswith('/') and not settings.SUPABASE_STORAGE_CONFIGURED:
     urlpatterns += [
         path(
             settings.MEDIA_URL.lstrip('/'),

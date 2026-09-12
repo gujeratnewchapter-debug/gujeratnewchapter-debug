@@ -24,7 +24,9 @@ export function Navbar() {
   function avatarSource(avatar?: string | null) {
     if (!avatar) return null;
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) return avatar;
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || (
+      process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : ''
+    );
     return `${base.replace(/\/api\/?$/, '')}${avatar.startsWith('/') ? '' : '/'}${avatar}`;
   }
 

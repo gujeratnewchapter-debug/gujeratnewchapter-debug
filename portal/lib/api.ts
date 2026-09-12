@@ -2,7 +2,9 @@ import axios from 'axios';
 import { supabase } from './supabase';
 import { getStoredDjangoAccessToken, isUsableJwtToken } from './auth-token';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (
+  process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : ''
+);
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
 

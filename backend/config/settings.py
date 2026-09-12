@@ -147,14 +147,52 @@ USE_TZ = True
 STATIC_URL = os.environ.get('DJANGO_STATIC_URL', '/static/')
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# User uploads use Supabase Storage in production so they survive Render
+# restarts and redeployments. Local development keeps filesystem storage.
+supabase_storage_values = {
+    'endpoint_url': os.environ.get('SUPABASE_S3_ENDPOINT', ''),
+    'access_key': os.environ.get('SUPABASE_S3_ACCESS_KEY_ID', ''),
+    'secret_key': os.environ.get('SUPABASE_S3_SECRET_ACCESS_KEY', ''),
+    'bucket_name': os.environ.get('SUPABASE_STORAGE_BUCKET', ''),
+    'public_url': os.environ.get('SUPABASE_STORAGE_PUBLIC_URL', ''),
+}
+SUPABASE_STORAGE_CONFIGURED = all(supabase_storage_values.values())
+if not DEBUG and not SUPABASE_STORAGE_CONFIGURED:
+    raise RuntimeError(
+        'Supabase Storage variables must be set when DJANGO_DEBUG is false.'
+    )
+
 STORAGES = {
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': (
+            'storages.backends.s3.S3Storage'
+            if SUPABASE_STORAGE_CONFIGURED
+            else 'django.core.files.storage.FileSystemStorage'
+        ),
     },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
+
+if SUPABASE_STORAGE_CONFIGURED:
+    AWS_S3_ENDPOINT_URL = supabase_storage_values['endpoint_url']
+    AWS_ACCESS_KEY_ID = supabase_storage_values['access_key']
+    AWS_SECRET_ACCESS_KEY = supabase_storage_values['secret_key']
+    AWS_STORAGE_BUCKET_NAME = supabase_storage_values['bucket_name']
+    AWS_S3_REGION_NAME = os.environ.get('SUPABASE_S3_REGION', 'us-east-1')
+    AWS_S3_CUSTOM_DOMAIN = (
+        supabase_storage_values['public_url']
+        .removeprefix('https://')
+        .removeprefix('http://')
+        .rstrip('/')
+    )
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_ADDRESSING_STYLE = 'path'
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
 
 # Media files (uploaded by users) - set explicitly to avoid empty MEDIA_URL
 MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
@@ -177,6 +215,10 @@ else:
         'http://127.0.0.1:3002',
     ]
 
+frontend_base_url = os.environ.get('FRONTEND_BASE_URL', '').rstrip('/')
+if frontend_base_url and frontend_base_url not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(frontend_base_url)
+
 if vercel_url:
     # Vercel provides VERCEL_URL without scheme (e.g. my-app.vercel.app)
     if vercel_url.startswith('http'):
@@ -198,6 +240,8 @@ CSRF_TRUSTED_ORIGINS = [
     for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
     if origin.strip()
 ]
+if frontend_base_url and frontend_base_url not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(frontend_base_url)
 
 SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', str(not DEBUG)).lower() == 'true'
 SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))

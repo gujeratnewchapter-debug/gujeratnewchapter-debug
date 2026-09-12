@@ -20,17 +20,18 @@ from .serializers import CertificateSerializer
 from enrollments.models import Enrollment
 
 
-def get_watermark_path():
+def get_watermark_bytes():
     configured_path = Path(settings.MEDIA_ROOT) / 'certificates' / 'certificate-watermark.png'
     if configured_path.exists():
-        return configured_path
+        return configured_path.read_bytes()
 
     try:
         from site_settings.models import SiteSettings
         hero_image = SiteSettings.load().hero_image
-        if hero_image and hero_image.path and Path(hero_image.path).exists():
-            return Path(hero_image.path)
-    except (OSError, ValueError):
+        if hero_image and hero_image.name:
+            with hero_image.open('rb') as image_file:
+                return image_file.read()
+    except (OSError, ValueError, NotImplementedError):
         pass
 
     return None
@@ -52,9 +53,9 @@ def generate_certificate_pdf(certificate):
     c.setFillColor(colors.white)
     c.rect(0, 0, width, height, fill=1, stroke=0)
 
-    watermark_path = get_watermark_path()
-    if watermark_path and watermark_path.exists():
-        watermark = Image.open(watermark_path).convert('RGBA')
+    watermark_bytes = get_watermark_bytes()
+    if watermark_bytes:
+        watermark = Image.open(io.BytesIO(watermark_bytes)).convert('RGBA')
         watermark.thumbnail((int(width * 0.82), int(height * 0.82)), Image.Resampling.LANCZOS)
         watermark = watermark.filter(ImageFilter.GaussianBlur(radius=1.2))
         alpha = watermark.getchannel('A').point(lambda value: int(value * 0.13))

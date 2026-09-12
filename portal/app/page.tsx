@@ -39,7 +39,9 @@ const STEPS = [
 function resolveImageUrl(image?: string | null) {
   if (!image) return null;
   if (image.startsWith('http://') || image.startsWith('https://')) return image;
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || (
+    process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : ''
+  );
   const origin = base.replace(/\/api\/?$/, '');
   return `${origin}${image.startsWith('/') ? '' : '/'}${image}`;
 }
