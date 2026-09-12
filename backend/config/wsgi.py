@@ -23,7 +23,11 @@ if os.environ.get('VERCEL'):
         django.setup()
         from django.core.management import call_command
 
-        call_command('migrate', '--noinput', verbosity=1)
+        # --fake-initial is safe: if tables from 0001 already exist
+        # (created outside Django), Django records 0001 as applied
+        # without recreating tables, then applies later migrations
+        # (0002-0005, e.g. subtitle) for real. Never drops/flushes.
+        call_command('migrate', '--noinput', verbosity=1, fake_initial=True)
     except Exception:
         # Never block app startup; runtime logs will contain details.
         import traceback
