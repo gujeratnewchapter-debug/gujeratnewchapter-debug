@@ -56,3 +56,6 @@ portal/AGENTS.md
 # Safe backend environment examples
 !backend/.env.example
 !backend/.env.production.example
+
+.vercel
+.env*
