@@ -160,6 +160,12 @@ STATIC_URL = os.environ.get('DJANGO_STATIC_URL', '/static/')
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
+# WhiteNoise's manifest backend keeps hashed asset URLs in production, but the
+# Django admin template can still be rendered when the manifest is not strict.
+# This avoids the Render-only crash caused by missing manifest entries for
+# static assets that are not currently referenced or any produced file names.
+WHITENOISE_MANIFEST_STRICT = False
+
 # User uploads use Supabase Storage in production so they survive Render
 # restarts and redeployments. Local development keeps filesystem storage.
 supabase_storage_values = {

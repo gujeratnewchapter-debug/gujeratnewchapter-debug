@@ -81,6 +81,49 @@ class StorageConfigFallbackTests(TestCase):
             importlib.reload(settings_module)
 
 
+class StaticFilesManifestTests(TestCase):
+    def test_white_noise_manifest_is_not_strict_in_production(self):
+        import config.settings as settings_module
+
+        original = {
+            'DJANGO_DEBUG': os.environ.get('DJANGO_DEBUG'),
+            'DJANGO_SECRET_KEY': os.environ.get('DJANGO_SECRET_KEY'),
+            'DJANGO_ALLOWED_HOSTS': os.environ.get('DJANGO_ALLOWED_HOSTS'),
+            'DATABASE_URL': os.environ.get('DATABASE_URL'),
+            'FRONTEND_BASE_URL': os.environ.get('FRONTEND_BASE_URL'),
+            'EMAIL_HOST': os.environ.get('EMAIL_HOST'),
+            'EMAIL_BACKEND': os.environ.get('EMAIL_BACKEND'),
+            'SUPABASE_URL': os.environ.get('SUPABASE_URL'),
+            'SUPABASE_JWKS_URL': os.environ.get('SUPABASE_JWKS_URL'),
+        }
+
+        try:
+            os.environ['DJANGO_DEBUG'] = 'False'
+            os.environ['DJANGO_SECRET_KEY'] = 'test-secret'
+            os.environ['DJANGO_ALLOWED_HOSTS'] = 'render-test.example.com'
+            os.environ['DATABASE_URL'] = 'postgres://user:pass@localhost:5432/app'
+            os.environ['FRONTEND_BASE_URL'] = 'https://frontend.example.com'
+            os.environ['EMAIL_HOST'] = 'smtp.example.com'
+            os.environ['EMAIL_BACKEND'] = 'django.core.mail.backends.smtp.EmailBackend'
+            os.environ['SUPABASE_URL'] = 'https://example.supabase.co'
+            os.environ['SUPABASE_JWKS_URL'] = 'https://example.supabase.co/auth/v1/jwks'
+
+            reloaded = importlib.reload(settings_module)
+
+            self.assertFalse(reloaded.WHITENOISE_MANIFEST_STRICT)
+            self.assertEqual(
+                reloaded.STORAGES['staticfiles']['BACKEND'],
+                'whitenoise.storage.CompressedManifestStaticFilesStorage',
+            )
+        finally:
+            for key, value in original.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+            importlib.reload(settings_module)
+
+
 class CSRFSecurityTests(TestCase):
     def test_csrf_trusted_origins_include_render_and_frontend_hosts(self):
         import config.settings as settings_module
