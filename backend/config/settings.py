@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from dotenv import load_dotenv
 
@@ -46,6 +46,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # third-party API framework (templates/filters for DRF browsable API)
+    'rest_framework',
+    'django_filters',
     # project apps (optional)
     'accounts',
     'ai_tutor',
@@ -96,11 +99,18 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # deployment-time environment variables without storing credentials in code.
 database_url = os.environ.get('DATABASE_URL', '')
 database_url_parts = urlparse(database_url) if database_url else None
+if not DEBUG and not database_url:
+    raise RuntimeError('DATABASE_URL must be set when DJANGO_DEBUG is false.')
 use_postgres = os.environ.get('DJANGO_DB_ENGINE', '').lower() == 'postgresql' or (
     database_url_parts and database_url_parts.scheme in ('postgres', 'postgresql')
 )
 if use_postgres:
     if database_url_parts and database_url_parts.scheme in ('postgres', 'postgresql'):
+        database_options = {
+            key: values[-1]
+            for key, values in parse_qs(database_url_parts.query).items()
+            if values
+        }
         database_config = {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': database_url_parts.path.lstrip('/'),
@@ -109,6 +119,8 @@ if use_postgres:
             'HOST': database_url_parts.hostname or '',
             'PORT': str(database_url_parts.port or 5432),
         }
+        if database_options:
+            database_config['OPTIONS'] = database_options
     else:
         database_config = {
             'ENGINE': 'django.db.backends.postgresql',
@@ -158,11 +170,8 @@ supabase_storage_values = {
     'public_url': os.environ.get('SUPABASE_STORAGE_PUBLIC_URL', ''),
 }
 SUPABASE_STORAGE_CONFIGURED = all(supabase_storage_values.values())
-if not DEBUG and not SUPABASE_STORAGE_CONFIGURED:
-    raise RuntimeError(
-        'Supabase Storage variables must be set when DJANGO_DEBUG is false.'
-    )
-
+# Storage is optional in production: use the filesystem backend when the
+# Supabase S3 credentials have not yet been configured on the host.
 STORAGES = {
     'default': {
         'BACKEND': (
@@ -216,6 +225,8 @@ else:
     ]
 
 frontend_base_url = os.environ.get('FRONTEND_BASE_URL', '').rstrip('/')
+if not DEBUG and not frontend_base_url:
+    raise RuntimeError('FRONTEND_BASE_URL must be set when DJANGO_DEBUG is false.')
 if frontend_base_url and frontend_base_url not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append(frontend_base_url)
 
@@ -256,6 +267,26 @@ if os.environ.get('DJANGO_SECURE_PROXY_SSL_HEADER', '').lower() == 'true':
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'webmaster@localhost')
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend'
+    if DEBUG
+    else 'django.core.mail.backends.smtp.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', str(not DEBUG)).lower() == 'true'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '30'))
+if (
+    not DEBUG
+    and EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend'
+    and not EMAIL_HOST
+):
+    raise RuntimeError('EMAIL_HOST must be set when DJANGO_DEBUG is false.')
+
 # Frontend base URL used by verification links and certificate URLs.
 FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:3000')
 
@@ -274,6 +305,12 @@ SUPABASE_JWKS_URL = os.environ.get(
     'SUPABASE_JWKS_URL',
     f'{SUPABASE_URL}/auth/v1/jwks' if SUPABASE_URL else '',
 )
+if not DEBUG and not SUPABASE_URL:
+    raise RuntimeError('SUPABASE_URL must be set when DJANGO_DEBUG is false.')
+if not DEBUG and not (SUPABASE_JWT_SECRET or SUPABASE_JWKS_URL):
+    raise RuntimeError(
+        'SUPABASE_JWT_SECRET or SUPABASE_JWKS_URL must be set when DJANGO_DEBUG is false.'
+    )
 
 # Google OAuth client used by server-side verification of ID tokens in accounts.GoogleLoginView
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
