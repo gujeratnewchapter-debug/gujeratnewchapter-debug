@@ -246,13 +246,27 @@ if vercel_url:
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
-    if origin.strip()
-]
-if frontend_base_url and frontend_base_url not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append(frontend_base_url)
+
+def _normalize_csrf_origin(value):
+    candidate = (value or '').strip().rstrip('/')
+    if not candidate:
+        return ''
+    if '://' in candidate:
+        return candidate
+    scheme = 'https' if not DEBUG else 'http'
+    return f'{scheme}://{candidate}'
+
+
+csrf_trusted_origins = []
+for raw_origin in [
+    *os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(','),
+    *ALLOWED_HOSTS,
+    frontend_base_url,
+]:
+    normalized = _normalize_csrf_origin(raw_origin)
+    if normalized and normalized not in csrf_trusted_origins:
+        csrf_trusted_origins.append(normalized)
+CSRF_TRUSTED_ORIGINS = csrf_trusted_origins
 
 SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', str(not DEBUG)).lower() == 'true'
 SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
@@ -262,7 +276,7 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-if os.environ.get('DJANGO_SECURE_PROXY_SSL_HEADER', '').lower() == 'true':
+if not DEBUG or os.environ.get('DJANGO_SECURE_PROXY_SSL_HEADER', '').lower() == 'true':
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
