@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { getMe } from '@/lib/api';
+import { normalizePublicEnvironmentValue } from '@/lib/http-headers';
 
 export function AuthModal({
   onClose,
@@ -21,7 +22,10 @@ export function AuthModal({
   const router = useRouter();
   const { user, signIn, signUp, signInWithGoogle } = useAuth();
   const { t } = useI18n();
-  const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const GOOGLE_CLIENT_ID = normalizePublicEnvironmentValue(
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
+  );
   const [tab, setTab] = useState<'signin' | 'signup'>(initialTab);
   const [returnTo, setReturnTo] = useState<string | null>(initialReturnTo);
   const [role, setRole] = useState<'student' | 'instructor'>('student');

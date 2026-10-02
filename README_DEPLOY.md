@@ -6,7 +6,7 @@ Summary
 
 Files added
 - `portal/vercel.json` — Vercel build and route placeholder (forwards `/api/*` to backend).
-- `.github/workflows/deploy-frontend.yml` — GitHub Actions workflow to build and deploy the `portal` folder to Vercel on push to `main`/`master`.
+- `.github/workflows/frontend-ci.yml` — GitHub Actions workflow to lint and build the `portal` folder.
 - `backend/.env.production.example` and `portal/.env.production.example` — example env vars for production.
 
 Quick steps (frontend)
@@ -16,10 +16,9 @@ Quick steps (frontend)
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `NEXT_PUBLIC_API_BASE_URL` (https://api.YOUR_DOMAIN or https://your-backend-host)
    - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (optional)
-3. In GitHub repository settings → Secrets → Actions add:
-   - `VERCEL_TOKEN` (create at https://vercel.com/account/tokens)
-   - `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` (found in Vercel project settings)
-4. Push to `main` — the workflow `.github/workflows/deploy-frontend.yml` will build `portal` and run the Vercel action.
+3. Connect the GitHub repository in Vercel Project Settings → Git. Production deployments then run automatically from pushes to the production branch; GitHub Actions does not need a Vercel token.
+4. Set the production Supabase and API values under Vercel Project Settings → Environment Variables. Paste plain values without quotes or invisible BOM characters. Re-deploy after changing any `NEXT_PUBLIC_*` value because Next.js embeds them at build time.
+5. GitHub Actions runs lint and a production build on frontend changes.
 
 Quick steps (backend)
 1. Choose a host (Render / Heroku / DigitalOcean App Platform / Azure App Service). Example with Render:
@@ -33,5 +32,5 @@ DNS and SSL
 - For production, point your domain A/ALIAS to the hosting provider (Vercel for frontend; backend host for API). Enable HTTPS using the host's automatic cert provisioning.
 
 Notes
-- `portal/vercel.json` contains a rewrite that assumes `NEXT_PUBLIC_API_BASE_URL` is set in Vercel to your backend host. Edit as needed.
+- `portal/vercel.json` uses the Next.js framework configuration. Set `NEXT_PUBLIC_API_BASE_URL` in Vercel to your backend host.
 - I cannot set Vercel or GitHub secrets on your account — add them in the respective provider consoles.

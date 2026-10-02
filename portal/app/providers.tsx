@@ -4,9 +4,13 @@ import React from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from '@/lib/auth-context';
 import { I18nProvider } from '@/lib/i18n';
+import { normalizePublicEnvironmentValue } from '@/lib/http-headers';
 import { useEffect } from 'react';
 
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_ID = normalizePublicEnvironmentValue(
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+  'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
+);
 
 if (!GOOGLE_CLIENT_ID) {
   console.info('NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set. Google sign-in will be disabled.');

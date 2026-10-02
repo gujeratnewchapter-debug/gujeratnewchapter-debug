@@ -17,8 +17,13 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
   }
 }
 
+export function isCompactJwtToken(token?: string | null): token is string {
+  return typeof token === 'string'
+    && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
+}
+
 export function isUsableJwtToken(token?: string | null): boolean {
-  if (!token || typeof token !== 'string') return false;
+  if (!isCompactJwtToken(token)) return false;
 
   const payload = decodeJwtPayload(token);
   if (!payload || typeof payload !== 'object') return false;
