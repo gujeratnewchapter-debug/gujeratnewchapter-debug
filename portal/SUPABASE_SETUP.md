@@ -17,7 +17,6 @@ This document lists the steps required to get authentication flows working end-t
 - Create or update `portal/.env.local` with:
   - `NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-public-key>`
-  - `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<google-client-id>`
   - `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api` (dev)
 
 4) Environment variables (backend)
@@ -35,10 +34,10 @@ node portal/scripts/check_supabase.js
 ```
 - Attempt email signup in the UI; if you see `email is invalid` or `too many requests`, check Supabase dashboard settings and rate limits.
 
-6) Google direct sign-in
-- Frontend uses Google Identity Services to obtain an ID token and exchanges it with Supabase via `signInWithIdToken`.
-- Ensure `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set in `portal/.env.local` and the Google provider is configured in Supabase.
-- If direct ID-token sign-in fails, the app falls back to redirect-based OAuth.
+6) Google sign-in
+- The frontend uses Supabase redirect-based OAuth; it does not need a Google client ID in frontend environment variables.
+- Enable Google under Supabase Authentication → Providers and configure the Google OAuth client there.
+- Add each frontend callback URL (for example, `http://localhost:3000/auth/callback` and `https://ethiopian-startup-school-frontend.vercel.app/auth/callback`) to Supabase Authentication → URL Configuration → Redirect URLs.
 
 7) Troubleshooting
 - If `/auth/v1/token?grant_type=password` returns 400:

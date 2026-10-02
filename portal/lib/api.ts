@@ -1,11 +1,21 @@
 import axios, { AxiosHeaders } from 'axios';
 import { supabase } from './supabase';
 import { getStoredDjangoAccessToken, isCompactJwtToken, isUsableJwtToken } from './auth-token';
-import { assertValidHttpHeaderValue } from './http-headers';
+import { assertValidHttpHeaderValue, normalizePublicEnvironmentValue } from './http-headers';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (
-  process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : ''
-);
+const DEFAULT_API_BASE_URL =
+  process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8000/api'
+    : 'https://ethiopian-startup-school-api.onrender.com/api';
+const PUBLIC_CONTENT_TIMEOUT = 65_000;
+const AUTH_REQUEST_TIMEOUT = 65_000;
+
+export const API_BASE_URL =
+  normalizePublicEnvironmentValue(process.env.NEXT_PUBLIC_API_BASE_URL, 'NEXT_PUBLIC_API_BASE_URL')
+  || DEFAULT_API_BASE_URL;
+const COURSE_DETAIL_CACHE_MS = 15_000;
+const courseDetailRequests = new Map<string, { expiresAt: number; promise: Promise<any> }>();
+const sessionExchangeRequests = new Map<string, Promise<any>>();
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
 let sessionSyncPromise: Promise<any> | null = null;
@@ -22,6 +32,17 @@ function validateRequestHeaders(headers: AxiosHeaders) {
     if (value == null) continue;
     assertValidHttpHeaderValue(name, String(value));
   }
+}
+
+export function resolveMediaUrl(image?: string | null) {
+  if (!image) return null;
+  if (/^https?:\/\//i.test(image) || image.startsWith('data:') || image.startsWith('blob:')) return image;
+  const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+  return new URL(image, `${origin}/`).toString();
+}
+
+function clearCourseDetailRequests() {
+  courseDetailRequests.clear();
 }
 
 apiClient.interceptors.request.use(async (config) => {
@@ -98,18 +119,46 @@ export const register = (payload: {
   username?: string; email: string; password: string;
   first_name?: string; last_name?: string; full_name?: string;
   role: 'student' | 'instructor';
-}) => apiClient.post('/auth/register/', payload);
+}) => apiClient.post('/auth/register/', payload, { timeout: AUTH_REQUEST_TIMEOUT });
 
 export const login = (username: string, password: string) =>
-  apiClient.post('/auth/login/', { username, password });
+  apiClient.post('/auth/login/', { username, password }, { timeout: AUTH_REQUEST_TIMEOUT });
 
 export const syncSupabaseSession = (accessToken: string) =>
   apiClient.get('/auth/session/sync/', {
     headers: { Authorization: createBearerAuthorization(accessToken) },
+    timeout: AUTH_REQUEST_TIMEOUT,
   });
 
+export function syncSupabaseSessionWithRefresh(accessToken: string) {
+  const pending = sessionExchangeRequests.get(accessToken);
+  if (pending) return pending;
+
+  const request = (async () => {
+    try {
+      return await syncSupabaseSession(accessToken);
+    } catch (syncError: any) {
+      const status = syncError?.response?.status;
+      if (status !== 401 && status !== 403) throw syncError;
+
+      const { data, error } = await supabase.auth.refreshSession();
+      const refreshedToken = data.session?.access_token;
+      if (error || !refreshedToken) throw syncError;
+      return syncSupabaseSession(refreshedToken);
+    }
+  })();
+
+  sessionExchangeRequests.set(accessToken, request);
+  void request.finally(() => {
+    if (sessionExchangeRequests.get(accessToken) === request) {
+      sessionExchangeRequests.delete(accessToken);
+    }
+  }).catch(() => undefined);
+  return request;
+}
+
 export const googleLogin = (id_token: string, role: 'student' | 'instructor' = 'student') =>
-  apiClient.post('/auth/login/google/', { id_token, role });
+  apiClient.post('/auth/login/google/', { id_token, role }, { timeout: AUTH_REQUEST_TIMEOUT });
 
 export function setDjangoAuthToken(accessToken: string | null) {
   if (accessToken) {
@@ -129,30 +178,57 @@ export function clearDjangoAuthToken() {
 
 export const verifyEmail = (token: string) => apiClient.post('/auth/verify-email/', { token });
 export const resendVerification = () => apiClient.post('/auth/resend-verification/');
-export const getMe = () => apiClient.get('/auth/me/');
+export const getMe = () => apiClient.get('/auth/me/', { timeout: AUTH_REQUEST_TIMEOUT });
 export const updateMe = (payload: any) => apiClient.patch('/auth/me/', payload);
 
 // ---- Site settings ----
-export const getSiteSettings = () => apiClient.get('/site-settings/');
-export const getPageContent = (slug: string) => apiClient.get(`/page-content/${slug}/`);
+export const getSiteSettings = () => apiClient.get('/site-settings/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
+export const getPageContent = (slug: string) => apiClient.get(`/page-content/${slug}/`, { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
 
 // ---- Courses ----
-export const getCourses = (params?: Record<string, any>) => apiClient.get('/courses/', { params });
-export const getCourse = (id: number | string) => apiClient.get(`/courses/${id}/`);
+export const getCourses = (params?: Record<string, any>) => apiClient.get('/courses/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { ...params, _fresh: Date.now() } });
+export function getCourse(id: number | string, forceRefresh = false) {
+  const key = String(id);
+  const cached = courseDetailRequests.get(key);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.promise;
+
+  const promise = apiClient.get(`/courses/${id}/`, { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } })
+    .catch((error) => {
+      courseDetailRequests.delete(key);
+      throw error;
+    });
+  courseDetailRequests.set(key, { expiresAt: Date.now() + COURSE_DETAIL_CACHE_MS, promise });
+  return promise;
+}
+export function prefetchCourse(id: number | string) {
+  void getCourse(id).catch(() => undefined);
+}
 export const getSection = (id: number | string) => apiClient.get(`/sections/${id}/`);
-export const createCourse = (payload: any) => apiClient.post('/courses/', payload);
-export const updateCourse = (id: number, payload: any) => apiClient.patch(`/courses/${id}/`, payload);
-export const deleteCourse = (id: number) => apiClient.delete(`/courses/${id}/`);
-export const getCategories = () => apiClient.get('/categories/');
+export const createCourse = async (payload: any) => {
+  const response = await apiClient.post('/courses/', payload);
+  clearCourseDetailRequests();
+  return response;
+};
+export const updateCourse = async (id: number, payload: any) => {
+  const response = await apiClient.patch(`/courses/${id}/`, payload);
+  clearCourseDetailRequests();
+  return response;
+};
+export const deleteCourse = async (id: number) => {
+  const response = await apiClient.delete(`/courses/${id}/`);
+  clearCourseDetailRequests();
+  return response;
+};
+export const getCategories = () => apiClient.get('/categories/', { timeout: PUBLIC_CONTENT_TIMEOUT });
 export const getInstructorAnalytics = () => apiClient.get('/courses/instructor-analytics/');
 
-export const createSection = (payload: any) => apiClient.post('/sections/', payload);
-export const updateSection = (id: number, payload: any) => apiClient.patch(`/sections/${id}/`, payload);
-export const deleteSection = (id: number) => apiClient.delete(`/sections/${id}/`);
+export const createSection = async (payload: any) => { const response = await apiClient.post('/sections/', payload); clearCourseDetailRequests(); return response; };
+export const updateSection = async (id: number, payload: any) => { const response = await apiClient.patch(`/sections/${id}/`, payload); clearCourseDetailRequests(); return response; };
+export const deleteSection = async (id: number) => { const response = await apiClient.delete(`/sections/${id}/`); clearCourseDetailRequests(); return response; };
 
-export const createLesson = (payload: any) => apiClient.post('/lessons/', payload);
-export const updateLesson = (id: number, payload: any) => apiClient.patch(`/lessons/${id}/`, payload);
-export const deleteLesson = (id: number) => apiClient.delete(`/lessons/${id}/`);
+export const createLesson = async (payload: any) => { const response = await apiClient.post('/lessons/', payload); clearCourseDetailRequests(); return response; };
+export const updateLesson = async (id: number, payload: any) => { const response = await apiClient.patch(`/lessons/${id}/`, payload); clearCourseDetailRequests(); return response; };
+export const deleteLesson = async (id: number) => { const response = await apiClient.delete(`/lessons/${id}/`); clearCourseDetailRequests(); return response; };
 export const getLesson = (id: number) => apiClient.get(`/lessons/${id}/`);
 export const createResource = (payload: any) => apiClient.post('/resources/', payload);
 export const uploadResource = (payload: FormData) => apiClient.post('/resources/', payload);

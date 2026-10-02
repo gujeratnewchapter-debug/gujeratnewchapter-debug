@@ -1,9 +1,65 @@
 from django.contrib.auth import get_user_model
 from unittest.mock import patch
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+from rest_framework.exceptions import AuthenticationFailed
+
+from .authentication import SupabaseJWTAuthentication
 
 User = get_user_model()
+
+
+class SupabaseJWTVerificationTests(SimpleTestCase):
+    def test_authentication_challenge_uses_bearer_scheme(self):
+        self.assertEqual(SupabaseJWTAuthentication().authenticate_header(None), 'Bearer')
+
+    @override_settings(
+        SUPABASE_JWT_SECRET='legacy-secret',
+        SUPABASE_JWKS_URL='https://example.supabase.co/auth/v1/jwks',
+    )
+    @patch('accounts.authentication.jwt.PyJWKClient')
+    @patch('accounts.authentication.jwt.get_unverified_header', return_value={'alg': 'ES256'})
+    @patch('accounts.authentication.jwt.decode')
+    def test_asymmetric_token_uses_jwks_even_if_legacy_secret_is_configured(
+        self, decode, get_header, jwks_client,
+    ):
+        signing_key = jwks_client.return_value.get_signing_key_from_jwt.return_value
+        signing_key.key = object()
+        decode.return_value = {'sub': 'supabase-user', 'aud': 'authenticated'}
+
+        payload = SupabaseJWTAuthentication()._decode_token('header.payload.signature')
+
+        self.assertEqual(payload['sub'], 'supabase-user')
+        jwks_client.assert_called_once_with(
+            'https://example.supabase.co/auth/v1/.well-known/jwks.json'
+        )
+        decode.assert_called_once_with(
+            'header.payload.signature',
+            signing_key.key,
+            algorithms=['ES256'],
+            audience='authenticated',
+            options={'verify_aud': True},
+        )
+
+    @override_settings(SUPABASE_JWT_SECRET='legacy-secret', SUPABASE_JWKS_URL='')
+    @patch('accounts.authentication.jwt.get_unverified_header', return_value={'alg': 'HS256'})
+    @patch('accounts.authentication.jwt.decode', return_value={'sub': 'supabase-user'})
+    def test_legacy_hs256_token_uses_configured_secret(self, decode, get_header):
+        payload = SupabaseJWTAuthentication()._decode_token('header.payload.signature')
+
+        self.assertEqual(payload['sub'], 'supabase-user')
+        decode.assert_called_once_with(
+            'header.payload.signature',
+            'legacy-secret',
+            algorithms=['HS256'],
+            audience='authenticated',
+            options={'verify_aud': True},
+        )
+
+    @patch('accounts.authentication.jwt.get_unverified_header', return_value={'alg': 'none'})
+    def test_rejects_unsupported_token_signing_algorithm(self, get_header):
+        with self.assertRaisesMessage(AuthenticationFailed, 'unsupported signing algorithm'):
+            SupabaseJWTAuthentication()._decode_token('header.payload.signature')
 
 
 class LoginEmailRegressionTests(TestCase):
@@ -28,6 +84,12 @@ class LoginEmailRegressionTests(TestCase):
         payload = response.json()
         self.assertIn('access', payload)
         self.assertIn('refresh', payload)
+
+    def test_session_sync_requires_bearer_authentication(self):
+        response = self.client.get(reverse('session_sync'))
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.headers.get('WWW-Authenticate'), 'Bearer')
 
     def test_register_accepts_full_name_and_splits_names(self):
         response = self.client.post(

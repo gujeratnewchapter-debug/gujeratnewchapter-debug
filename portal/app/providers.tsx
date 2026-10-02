@@ -1,20 +1,9 @@
 'use client';
 
 import React from 'react';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from '@/lib/auth-context';
 import { I18nProvider } from '@/lib/i18n';
-import { normalizePublicEnvironmentValue } from '@/lib/http-headers';
 import { useEffect } from 'react';
-
-const GOOGLE_CLIENT_ID = normalizePublicEnvironmentValue(
-  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-  'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
-);
-
-if (!GOOGLE_CLIENT_ID) {
-  console.info('NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set. Google sign-in will be disabled.');
-}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -29,19 +18,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       // Ignore errors during cleanup
     }
   }, []);
-  if (!GOOGLE_CLIENT_ID) {
-    return (
-      <I18nProvider>
-        <AuthProvider>{children}</AuthProvider>
-      </I18nProvider>
-    );
-  }
-
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <I18nProvider>
-        <AuthProvider>{children}</AuthProvider>
-      </I18nProvider>
-    </GoogleOAuthProvider>
+    <I18nProvider>
+      <AuthProvider>{children}</AuthProvider>
+    </I18nProvider>
   );
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -11,12 +12,17 @@ from rest_framework.authentication import BaseAuthentication, get_authorization_
 from rest_framework.exceptions import AuthenticationFailed
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+SUPPORTED_SUPABASE_JWT_ALGORITHMS = {'ES256', 'RS256', 'HS256'}
 
 
 class SupabaseJWTAuthentication(BaseAuthentication):
     """Validate the bearer token issued by Supabase Auth and map it to this app's user model."""
 
     keyword = 'Bearer'
+
+    def authenticate_header(self, request):
+        return self.keyword
 
     def authenticate(self, request):
         auth = get_authorization_header(request).split()
@@ -43,7 +49,8 @@ class SupabaseJWTAuthentication(BaseAuthentication):
 
         try:
             payload = self._decode_token(token)
-        except Exception:
+        except (jwt.InvalidTokenError, AuthenticationFailed, jwt.PyJWKClientError) as error:
+            logger.debug('Supabase JWT local validation failed (%s); trying Auth API validation.', type(error).__name__)
             payload = self._fetch_supabase_user(token)
 
         if not payload:
@@ -101,7 +108,11 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         try:
             with urlopen(request, timeout=5) as response:
                 user_data = json.loads(response.read().decode('utf-8'))
-        except (HTTPError, URLError, ValueError, TimeoutError):
+        except HTTPError as error:
+            logger.warning('Supabase Auth API rejected a bearer token (HTTP %s).', error.code)
+            return None
+        except (URLError, ValueError, TimeoutError) as error:
+            logger.warning('Supabase Auth API token validation failed (%s).', type(error).__name__)
             return None
 
         if not user_data.get('id'):
@@ -113,24 +124,35 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         }
 
     def _decode_token(self, token):
-        if getattr(settings, 'SUPABASE_JWT_SECRET', ''):
-            return jwt.decode(
-                token,
-                settings.SUPABASE_JWT_SECRET,
-                algorithms=['HS256'],
-                audience='authenticated',
-                options={'verify_aud': True},
-            )
+        algorithm = jwt.get_unverified_header(token).get('alg')
+        if algorithm not in SUPPORTED_SUPABASE_JWT_ALGORITHMS:
+            raise AuthenticationFailed('Supabase token uses an unsupported signing algorithm.')
+
+        secret = getattr(settings, 'SUPABASE_JWT_SECRET', '')
+        secret_error = None
+        if algorithm == 'HS256' and secret:
+            try:
+                return jwt.decode(
+                    token,
+                    secret,
+                    algorithms=['HS256'],
+                    audience='authenticated',
+                    options={'verify_aud': True},
+                )
+            except jwt.InvalidTokenError as error:
+                secret_error = error
 
         jwks_url = getattr(settings, 'SUPABASE_JWKS_URL', '')
         if not jwks_url:
+            if secret_error:
+                raise secret_error
             raise AuthenticationFailed('Supabase JWT verification is not configured on the server.')
+        jwks_url = jwks_url.rstrip('/')
+        if jwks_url.endswith('/auth/v1/jwks'):
+            project_url = jwks_url[:-len('/auth/v1/jwks')]
+            jwks_url = f'{project_url}/auth/v1/.well-known/jwks.json'
 
         signing_key = jwt.PyJWKClient(jwks_url).get_signing_key_from_jwt(token)
-        algorithm = jwt.get_unverified_header(token).get('alg')
-        if not algorithm:
-            raise AuthenticationFailed('Supabase token has no signing algorithm.')
-
         return jwt.decode(
             token,
             signing_key.key,

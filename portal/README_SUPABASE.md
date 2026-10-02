@@ -4,7 +4,6 @@ Supabase setup and diagnostics
 - Copy `.env.example` to `.env.local` and set:
   - `NEXT_PUBLIC_SUPABASE_URL` — your Supabase project URL (e.g. https://xyz.supabase.co)
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — the "anon public" key from Supabase Project → Settings → API
-  - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` — (optional) Google OAuth client id
 - Paste these values as plain text. Do not include surrounding quotes or a UTF-8 BOM; the frontend strips an accidental leading/trailing BOM and rejects invalid request-header characters before sending requests.
 
 2) Enable email signups
@@ -15,8 +14,8 @@ Supabase setup and diagnostics
 3) Google OAuth (optional)
 - In Supabase dashboard: Authentication → Providers → Google
   - Enter your Google Client ID and Secret
-  - Add redirect URL(s) under Authentication → Settings → Redirect URLs (e.g. `http://localhost:3000/auth/callback`)
-- Also add the deployed frontend origin and callback URL (for example `https://ethiopian-startup-school-frontend.vercel.app` and `https://ethiopian-startup-school-frontend.vercel.app/auth/callback`), and authorize that origin in Google Cloud Console.
+  - Add the Supabase callback URI shown in provider settings to the Google OAuth client's authorized redirect URIs.
+- Add each frontend callback URL (for example `http://localhost:3000/auth/callback` and `https://ethiopian-startup-school-frontend.vercel.app/auth/callback`) under Supabase Authentication → URL Configuration → Redirect URLs.
 
 4) Diagnostic script
 - Run this script to detect common misconfigurations:

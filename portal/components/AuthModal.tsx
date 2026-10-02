@@ -2,13 +2,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import SafeGoogleLogin from './SafeGoogleLogin';
 import { X, Eye, EyeOff, Github } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { getMe } from '@/lib/api';
-import { normalizePublicEnvironmentValue } from '@/lib/http-headers';
 
 export function AuthModal({
   onClose,
@@ -22,10 +20,6 @@ export function AuthModal({
   const router = useRouter();
   const { user, signIn, signUp, signInWithGoogle } = useAuth();
   const { t } = useI18n();
-  const GOOGLE_CLIENT_ID = normalizePublicEnvironmentValue(
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-    'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
-  );
   const [tab, setTab] = useState<'signin' | 'signup'>(initialTab);
   const [returnTo, setReturnTo] = useState<string | null>(initialReturnTo);
   const [role, setRole] = useState<'student' | 'instructor'>('student');
@@ -85,6 +79,14 @@ export function AuthModal({
     setSignUpForm({ full_name: '', email: '', password: '', confirm_password: '' });
     setReturnTo(null);
     onClose();
+  }
+
+  function saveOAuthReturnTo() {
+    if (returnTo?.startsWith('/') && !returnTo.startsWith('//')) {
+      sessionStorage.setItem('auth_return_to', returnTo);
+    } else {
+      sessionStorage.removeItem('auth_return_to');
+    }
   }
 
   async function routeAfterAuth() {
@@ -160,33 +162,14 @@ export function AuthModal({
   }
 
   async function handleGoogleSignIn() {
-    // fallback for environments without the in-page Google button
     setError('');
     setSuccess('');
     setLoading(true);
     try {
+      saveOAuthReturnTo();
       await signInWithGoogle();
     } catch (err: any) {
       setError(err?.message || 'Google sign-in failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleGoogleCredential(credential: string | undefined) {
-    if (!credential) {
-      setError('Google did not return a credential.');
-      return;
-    }
-    setError('');
-    setSuccess('');
-    setLoading(true);
-    try {
-      // Exchange the Google ID token with Supabase for direct sign-in
-      await signInWithGoogle(credential);
-      await routeAfterAuth();
-    } catch (err: any) {
-      setError(err?.message || 'Google sign-in failed.');
     } finally {
       setLoading(false);
     }
@@ -197,6 +180,7 @@ export function AuthModal({
     setSuccess('');
     setLoading(true);
     try {
+      saveOAuthReturnTo();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
@@ -261,20 +245,16 @@ export function AuthModal({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
-          {GOOGLE_CLIENT_ID ? (
-            <SafeGoogleLogin onCredential={(c) => handleGoogleCredential(c)} />
-          ) : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleGoogleSignIn}
-              disabled={loading || !GOOGLE_CLIENT_ID}
-              style={{ flex: 1 }}
-              title={!GOOGLE_CLIENT_ID ? 'Google sign-in is not configured' : undefined}
-            >
-              Google
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            style={{ flex: 1 }}
+            title="Continue with Google through Supabase"
+          >
+            Continue with Google
+          </button>
           <button
             type="button"
             className="btn btn-primary"
@@ -294,17 +274,7 @@ export function AuthModal({
           <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
         </div>
 
-        {error && (
-          <>
-            <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>
-            {/* Provide an extra troubleshooting hint when Google Identity reports origin/403 errors. */}
-            {error.toLowerCase().includes('google') || error.toLowerCase().includes('origin') || error.toLowerCase().includes('not allowed') || error.toLowerCase().includes('403') ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 8 }}>
-                Add <strong>http://localhost:3000</strong> as an authorized JavaScript origin in Google Cloud Console for this OAuth client. If using the Supabase OAuth path, also enable Google under Supabase Authentication → Providers.
-              </p>
-            ) : null}
-          </>
-        )}
+        {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
         {success && <p style={{ color: 'var(--brand)', fontSize: 13, marginBottom: 10 }}>{success}</p>}
 
         {tab === 'signin' ? (

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { ChevronDown, Lock, PlayCircle, FileText, Presentation, Headphones, Code, Radio, BookOpen } from 'lucide-react';
@@ -14,6 +14,18 @@ const ICONS: Record<string, any> = {
   interactive_html: Code, coding_exercise: Code, audio: Headphones, live_session: Radio,
 };
 
+function getLessonRedirectUrl(targetCourse: any, fallbackSlug: string) {
+  const allLessons = targetCourse?.sections?.flatMap((section: any) => section.lessons ?? []) ?? [];
+  const nextLesson = allLessons.find((lesson: any) => lesson && lesson.id != null && (lesson.is_unlocked !== false || lesson.is_preview)) ?? allLessons[0];
+  const targetSlug = targetCourse?.slug || fallbackSlug;
+
+  if (nextLesson?.id) {
+    return `/courses/${targetSlug}/lessons/${nextLesson.id}`;
+  }
+
+  return `/courses/${targetSlug}`;
+}
+
 export default function CourseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { isAuthenticated, isBackendAuthenticated } = useAuth();
@@ -22,11 +34,14 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<any>(null);
   const [enrollment, setEnrollment] = useState<any>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [courseError, setCourseError] = useState<string | null>(null);
   const [openWeeks, setOpenWeeks] = useState<Record<string, boolean>>({});
   const [finalExam, setFinalExam] = useState<any>(null);
   const [moduleFinalQuizzes, setModuleFinalQuizzes] = useState<Record<string, any>>({});
+  const loadRef = useRef<(forceRefresh?: boolean) => Promise<void>>(async () => undefined);
+  const autoEnrollCourseId = useRef<number | null>(null);
 
   const weekGroups = React.useMemo(() => {
     const groups: Record<string, { title: string; sections: any[] }> = {};
@@ -69,11 +84,29 @@ export default function CourseDetailPage() {
     setLoading(true);
     setCourseError(null);
     setEnrollment(null);
-    void load();
+    let lastRefreshAt = Date.now();
+    void loadRef.current();
+    const refreshCourse = () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastRefreshAt > 1000) {
+        lastRefreshAt = now;
+        void loadRef.current(true);
+      }
+    };
+    window.addEventListener('focus', refreshCourse);
+    document.addEventListener('visibilitychange', refreshCourse);
+    return () => {
+      window.removeEventListener('focus', refreshCourse);
+      document.removeEventListener('visibilitychange', refreshCourse);
+    };
   }, [slug, isAuthenticated, isBackendAuthenticated]);
 
   useEffect(() => {
-    if (!course?.id) return;
+    if (!course?.id || !isBackendAuthenticated) {
+      setFinalExam(null);
+      setModuleFinalQuizzes({});
+      return;
+    }
     getQuizzesForCourse(course.id)
       .then((res) => {
         const quizzes = res.data.results ?? res.data;
@@ -89,14 +122,55 @@ export default function CourseDetailPage() {
         setFinalExam(null);
         setModuleFinalQuizzes({});
       });
-  }, [course]);
+  }, [course?.id, isBackendAuthenticated]);
 
-  async function load() {
+  const enrollInCourse = React.useCallback(async (targetCourse: any) => {
+    setEnrollmentError(null);
+    setEnrolling(true);
+    try {
+      const { data: enrollmentsData } = await getMyEnrollments();
+      const existingEnrollment = (enrollmentsData.results ?? enrollmentsData)
+        .find((item: any) => item.course === targetCourse.id);
+      if (existingEnrollment) {
+        setEnrollment(existingEnrollment);
+        router.push(getLessonRedirectUrl(targetCourse, slug));
+        return;
+      }
+
+      const { data } = await enroll(targetCourse.id);
+      setEnrollment(data);
+      router.push(getLessonRedirectUrl(targetCourse, slug));
+    } catch (err: any) {
+      console.error('Failed to enroll in course:', err);
+      setEnrollmentError(
+        err?.response?.data?.detail || 'We could not enroll you right now. Please try again.',
+      );
+    } finally {
+      setEnrolling(false);
+    }
+  }, [router, slug]);
+
+  useEffect(() => {
+    if (
+      searchParams.get('enroll') !== '1'
+      || !isBackendAuthenticated
+      || !course?.id
+      || autoEnrollCourseId.current === course.id
+    ) {
+      return;
+    }
+
+    autoEnrollCourseId.current = course.id;
+    router.replace(`/courses/${course.slug || slug}?id=${course.id}`);
+    void enrollInCourse(course);
+  }, [course, enrollInCourse, isBackendAuthenticated, router, searchParams, slug]);
+
+  async function load(forceRefresh = false) {
     try {
       const idParam = searchParams?.get('id');
       if (idParam) {
         try {
-          const { data: detail } = await getCourse(idParam);
+          const { data: detail } = await getCourse(idParam, forceRefresh);
           setCourse(detail);
           if (isBackendAuthenticated) {
             try {
@@ -123,7 +197,7 @@ export default function CourseDetailPage() {
         return;
       }
 
-      const { data: detail } = await getCourse(match.id);
+      const { data: detail } = await getCourse(match.id, forceRefresh);
       setCourse(detail);
 
       if (isBackendAuthenticated) {
@@ -145,17 +219,7 @@ export default function CourseDetailPage() {
     }
   }
 
-  function getLessonRedirectUrl(targetCourse: any) {
-    const allLessons = targetCourse?.sections?.flatMap((section: any) => section.lessons ?? []) ?? [];
-    const nextLesson = allLessons.find((lesson: any) => lesson && lesson.id != null && (lesson.is_unlocked !== false || lesson.is_preview)) ?? allLessons[0];
-    const targetSlug = targetCourse?.slug || slug;
-
-    if (nextLesson?.id) {
-      return `/courses/${targetSlug}/lessons/${nextLesson.id}`;
-    }
-
-    return `/courses/${targetSlug}`;
-  }
+  loadRef.current = load;
 
   async function handleEnroll() {
     if (!course) return;
@@ -163,26 +227,16 @@ export default function CourseDetailPage() {
     const targetSlug = course.slug || slug;
 
     if (!isBackendAuthenticated) {
-      const authReturnTo = getLessonRedirectUrl(course);
+      const authReturnTo = `/courses/${targetSlug}?id=${course.id}&enroll=1`;
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('open-auth-modal', {
-          detail: { tab: 'signup', returnTo: authReturnTo },
+          detail: { tab: isAuthenticated ? 'signin' : 'signup', returnTo: authReturnTo },
         }));
       }
       return;
     }
 
-    setEnrolling(true);
-    try {
-      const { data } = await enroll(course.id);
-      setEnrollment(data);
-      router.push(getLessonRedirectUrl(course));
-    } catch (err) {
-      console.error('Failed to enroll in course:', err);
-      router.push(getLessonRedirectUrl(course));
-    } finally {
-      setEnrolling(false);
-    }
+    await enrollInCourse(course);
   }
 
   if (loading) return <div className="container section"><InnovationLoader label="Loading course" /></div>;
@@ -317,9 +371,12 @@ export default function CourseDetailPage() {
                 )}
               </>
             ) : (
-              <button className="btn btn-primary course-action-button" style={{ width: '100%' }} onClick={handleEnroll} disabled={enrolling}>
-                {enrolling ? 'Enrolling...' : course.is_free ? 'Enroll for Free' : 'Enroll Now'}
-              </button>
+              <>
+                <button className="btn btn-primary course-action-button" style={{ width: '100%' }} onClick={handleEnroll} disabled={enrolling}>
+                  {enrolling ? 'Enrolling...' : course.is_free ? 'Enroll for Free' : 'Enroll Now'}
+                </button>
+                {enrollmentError && <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{enrollmentError}</p>}
+              </>
             )}
           </div>
         </div>

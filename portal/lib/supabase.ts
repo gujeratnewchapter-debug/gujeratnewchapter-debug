@@ -46,6 +46,7 @@ if (supabaseUrl && supabaseAnonKey) {
   supabaseClient = {
     auth: {
       getSession: async () => ({ data: { session: null }, error: null }),
+      refreshSession: async () => ({ data: { session: null }, error: new Error('Supabase not configured') }),
       onAuthStateChange: (_cb: any) => ({ data: { subscription: { unsubscribe: () => {} } } }),
       signInWithPassword: async () => ({ error: new Error('Supabase not configured') }),
       signInWithOAuth: async () => ({ error: new Error('Supabase not configured') }),

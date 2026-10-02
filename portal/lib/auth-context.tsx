@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as api from './api';
 import { supabase } from './supabase';
-import { setDjangoAuthToken, clearDjangoAuthToken } from './api';
+import { setDjangoAuthToken, clearDjangoAuthToken, syncSupabaseSessionWithRefresh } from './api';
 import { getStoredDjangoAccessToken, isUsableJwtToken } from './auth-token';
 
 export type Role = 'student' | 'instructor' | 'super_admin';
@@ -36,7 +36,7 @@ interface AuthContextValue {
     full_name: string; email: string; password: string; confirm_password: string; role?: 'student' | 'instructor';
   }) => Promise<{ requiresConfirmation: boolean } | void>;
   signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<User>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -113,16 +113,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSupabaseSessionAvailable(true);
         setUser(normalizeSupabaseUser(session.user));
         try {
-          const { data: sessionData } = await api.syncSupabaseSession(session.access_token);
+          const { data: sessionData } = await syncSupabaseSessionWithRefresh(session.access_token);
           if (!mounted) return;
           setDjangoAuthToken(sessionData.access);
           setUser(sessionData.user as User);
           setTokenRefresh(prev => prev + 1);
-        } catch {
+        } catch (err) {
+          console.error('Failed to sync the Supabase session with the learning platform:', err);
           if (mounted) {
             clearDjangoAuthToken();
-            setSupabaseSessionAvailable(false);
-            setUser(null);
+            setSupabaseSessionAvailable(true);
+            setUser(normalizeSupabaseUser(session.user));
           }
         } finally {
           if (mounted) setIsLoading(false);
@@ -177,23 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signIn(email: string, password: string) {
     const normalizedEmail = email.trim();
 
-    async function syncSupabaseSession() {
-      const { data: firstSession } = await supabase.auth.getSession();
-      let accessToken = firstSession.session?.access_token;
-      if (!accessToken) throw new Error('No active session');
-
-      try {
-        return await api.syncSupabaseSession(accessToken);
-      } catch (syncError: any) {
-        if (syncError?.response?.status !== 401 && syncError?.response?.status !== 403) throw syncError;
-
-        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError || !refreshed.session?.access_token) throw syncError;
-        accessToken = refreshed.session.access_token;
-        return api.syncSupabaseSession(accessToken);
-      }
-    }
-
     try {
       // Remove stale Django credentials before starting a fresh Supabase login.
       clearDjangoAuthToken();
@@ -210,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data: { session } } = await supabase.auth.getSession();
             const accessToken = session?.access_token;
             if (accessToken) {
-              const { data: sessionData } = await syncSupabaseSession();
+              const { data: sessionData } = await syncSupabaseSessionWithRefresh(accessToken);
               setDjangoAuthToken(sessionData.access);
               setUser(sessionData.user as User);
               setTokenRefresh(prev => prev + 1);
@@ -240,13 +224,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const accessToken = res.data?.session?.access_token;
         if (!accessToken) throw new Error('No Supabase session token returned');
 
-        const { data: sessionData } = await syncSupabaseSession();
+        const { data: sessionData } = await syncSupabaseSessionWithRefresh(accessToken);
         setDjangoAuthToken(sessionData.access);
         setUser(sessionData.user as User);
         setTokenRefresh(prev => prev + 1);
         return;
       } catch (backendErr: any) {
         clearDjangoAuthToken();
+        const detail = backendErr?.response?.data?.detail;
+        if (typeof detail === 'string' && detail.trim()) {
+          throw new Error(`Sign-in could not be completed: ${detail}`);
+        }
         throw new Error('Sign-in is temporarily unavailable. Please try again.');
       }
 
@@ -261,60 +249,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function signInWithGoogle(idToken?: string) {
+  async function signInWithGoogle() {
     const isProviderDisabledError = (err: any) => {
       const msg = (err?.message || err?.error_description || String(err || '')).toLowerCase();
       return msg.includes('unsupported provider') || msg.includes('provider is not enabled') || msg.includes('google provider') && msg.includes('not enabled');
     };
 
-    try {
-      if (idToken) {
-        try {
-          const resp = await api.googleLogin(idToken);
-          const access = resp.data?.access;
-          if (access) {
-            setDjangoAuthToken(access);
-            setSupabaseSessionAvailable(true);
-            try {
-              const { data: profile } = await api.getMe();
-              setUser(profile as any);
-              setTokenRefresh(prev => prev + 1);
-              return;
-            } catch (pfErr) {
-              console.error('Failed to fetch profile after backend google login:', pfErr);
-              throw pfErr;
-            }
-          }
-        } catch (backendErr) {
-          console.warn('Backend Google login failed:', backendErr);
-          throw new Error(
-            'Google sign-in could not verify this credential. Add http://localhost:3000 to the Google OAuth client Authorized JavaScript origins, then try again.'
-          );
-        }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      if (isProviderDisabledError(error)) {
+        throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
       }
-
-      // Fallback: redirect-based OAuth via Supabase
-      try {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-        if (error) {
-          if (isProviderDisabledError(error)) {
-            throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
-          }
-          throw error;
-        }
-      } catch (err) {
-        if (isProviderDisabledError(err)) {
-          throw new Error('Google sign-in is not enabled in your Supabase project. Enable Google in Supabase Auth Providers or use email/password sign-in instead.');
-        }
-        throw err;
-      }
-    } catch (err) {
-      throw err;
+      throw error;
     }
   }
 
@@ -412,10 +363,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTokenRefresh(prev => prev + 1); // Trigger re-render to update hasValidDjangoSession
   }
 
-  async function refreshProfile() {
+  const refreshProfile = React.useCallback(async (): Promise<User> => {
     const { data } = await api.getMe();
-    setUser((current) => ({ ...(current || {} as User), ...data } as User));
-  }
+    setUser(data as User);
+    setTokenRefresh(prev => prev + 1);
+    return data as User;
+  }, []);
 
   return (
     <AuthContext.Provider

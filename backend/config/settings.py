@@ -323,7 +323,7 @@ SUPABASE_ANON_KEY = os.environ.get(
 SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', '')
 SUPABASE_JWKS_URL = os.environ.get(
     'SUPABASE_JWKS_URL',
-    f'{SUPABASE_URL}/auth/v1/jwks' if SUPABASE_URL else '',
+    f'{SUPABASE_URL}/auth/v1/.well-known/jwks.json' if SUPABASE_URL else '',
 )
 if not DEBUG and not SUPABASE_URL:
     raise RuntimeError('SUPABASE_URL must be set when DJANGO_DEBUG is false.')
@@ -351,8 +351,8 @@ AI_SITE_NAME = os.environ.get('AI_SITE_NAME', 'Ethiopian Startup School')
 # Django REST Framework settings: enable JWT and Supabase token authentication
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
         'accounts.authentication.SupabaseJWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
