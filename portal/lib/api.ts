@@ -1,6 +1,7 @@
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
 import { supabase } from './supabase';
-import { getStoredDjangoAccessToken, isUsableJwtToken } from './auth-token';
+import { getStoredDjangoAccessToken, isCompactJwtToken, isUsableJwtToken } from './auth-token';
+import { assertValidHttpHeaderValue } from './http-headers';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (
   process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : ''
@@ -8,19 +9,42 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
 
+function createBearerAuthorization(token: string) {
+  if (!isCompactJwtToken(token)) {
+    throw new Error('Refusing to send a malformed authentication token');
+  }
+  return `Bearer ${token}`;
+}
+
+function validateRequestHeaders(headers: AxiosHeaders) {
+  for (const [name, value] of Object.entries(headers.toJSON(true))) {
+    if (value == null) continue;
+    assertValidHttpHeaderValue(name, String(value));
+  }
+}
+
 apiClient.interceptors.request.use(async (config) => {
   const djangoToken = getStoredDjangoAccessToken();
   const headers = config.headers ?? {};
 
   if (!(headers as Record<string, string>).Authorization) {
     if (djangoToken && isUsableJwtToken(djangoToken)) {
-      (headers as Record<string, string>).Authorization = `Bearer ${djangoToken}`;
+      (headers as Record<string, string>).Authorization = createBearerAuthorization(djangoToken);
     } else {
       delete (headers as Record<string, string>).Authorization;
     }
   }
 
-  config.headers = headers;
+  const normalizedHeaders = AxiosHeaders.from(headers);
+  const authorization = normalizedHeaders.get('Authorization');
+  if (authorization != null
+    && (typeof authorization !== 'string'
+      || !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(authorization))) {
+    throw new Error('Refusing to send a malformed Authorization header');
+  }
+
+  config.headers = normalizedHeaders;
+  validateRequestHeaders(normalizedHeaders);
   return config;
 });
 
@@ -36,7 +60,7 @@ apiClient.interceptors.response.use(
         const { data: sessionData } = await syncSupabaseSessionFromBrowser();
         setDjangoAuthToken(sessionData.access);
         original.headers = original.headers ?? {};
-        original.headers.Authorization = `Bearer ${sessionData.access}`;
+        original.headers.Authorization = createBearerAuthorization(sessionData.access);
         return apiClient(original);
       } catch {
         clearDjangoAuthToken();
@@ -67,7 +91,7 @@ export const login = (username: string, password: string) =>
 
 export const syncSupabaseSession = (accessToken: string) =>
   apiClient.get('/auth/session/sync/', {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: createBearerAuthorization(accessToken) },
   });
 
 export const googleLogin = (id_token: string, role: 'student' | 'instructor' = 'student') =>
