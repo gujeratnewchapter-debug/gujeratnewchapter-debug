@@ -8,6 +8,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (
 );
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
+let sessionSyncPromise: Promise<any> | null = null;
 
 function createBearerAuthorization(token: string) {
   if (!isCompactJwtToken(token)) {
@@ -53,8 +54,10 @@ apiClient.interceptors.response.use(
   async (error) => {
     const original = error.config;
     const status = error.response?.status;
+    const requestPath = original?.url?.split('?')[0].replace(/\/+$/, '');
+    const isSessionSyncRequest = requestPath?.endsWith('/auth/session/sync');
 
-    if ((status === 401 || status === 403) && original && !original._authRetry) {
+    if (status === 401 && original && !original._authRetry && !isSessionSyncRequest) {
       original._authRetry = true;
       try {
         const { data: sessionData } = await syncSupabaseSessionFromBrowser();
@@ -72,11 +75,22 @@ apiClient.interceptors.response.use(
 );
 
 async function syncSupabaseSessionFromBrowser() {
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error || !session?.access_token) {
-    throw error || new Error('No active Supabase session');
+  if (!sessionSyncPromise) {
+    sessionSyncPromise = (async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session?.access_token) {
+        throw error || new Error('No active Supabase session');
+      }
+      return syncSupabaseSession(session.access_token);
+    })();
   }
-  return syncSupabaseSession(session.access_token);
+
+  const pendingSync = sessionSyncPromise;
+  try {
+    return await pendingSync;
+  } finally {
+    if (sessionSyncPromise === pendingSync) sessionSyncPromise = null;
+  }
 }
 
 // ---- Auth ----
