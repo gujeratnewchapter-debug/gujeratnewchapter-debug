@@ -48,6 +48,10 @@ class SendMessageSerializer(serializers.Serializer):
     content = serializers.CharField()
 
 
+class BusinessAdvisorQuestionSerializer(serializers.Serializer):
+    question = serializers.CharField(max_length=4000, trim_whitespace=True)
+
+
 class KnowledgeDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = KnowledgeDocument

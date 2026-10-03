@@ -217,7 +217,7 @@ export function getCourse(id: number | string, forceRefresh = false) {
 export function prefetchCourse(id: number | string) {
   void getCourse(id).catch(() => undefined);
 }
-export const getSection = (id: number | string) => apiClient.get(`/sections/${id}/`);
+export const getSection = (id: number | string) => apiClient.get(`/sections/${id}/`, { timeout: AUTH_REQUEST_TIMEOUT });
 export const createCourse = async (payload: any) => {
   const response = await apiClient.post('/courses/', payload);
   clearCourseDetailRequests();
@@ -243,27 +243,27 @@ export const deleteSection = async (id: number) => { const response = await apiC
 export const createLesson = async (payload: any) => { const response = await apiClient.post('/lessons/', payload); clearCourseDetailRequests(); return response; };
 export const updateLesson = async (id: number, payload: any) => { const response = await apiClient.patch(`/lessons/${id}/`, payload); clearCourseDetailRequests(); return response; };
 export const deleteLesson = async (id: number) => { const response = await apiClient.delete(`/lessons/${id}/`); clearCourseDetailRequests(); return response; };
-export const getLesson = (id: number) => apiClient.get(`/lessons/${id}/`);
+export const getLesson = (id: number) => apiClient.get(`/lessons/${id}/`, { timeout: AUTH_REQUEST_TIMEOUT });
 export const createResource = (payload: any) => apiClient.post('/resources/', payload);
 export const uploadResource = (payload: FormData) => apiClient.post('/resources/', payload);
 export const replaceVideoResources = (lesson: number, urls: string[]) => apiClient.post('/resources/replace-videos/', { lesson, urls });
 
 // ---- Enrollments ----
-export const getMyEnrollments = () => apiClient.get('/enrollments/');
-export const getEnrollmentProgress = (enrollmentId: number) => apiClient.get(`/enrollments/${enrollmentId}/progress/`);
+export const getMyEnrollments = () => apiClient.get('/enrollments/', { timeout: AUTH_REQUEST_TIMEOUT });
+export const getEnrollmentProgress = (enrollmentId: number) => apiClient.get(`/enrollments/${enrollmentId}/progress/`, { timeout: AUTH_REQUEST_TIMEOUT });
 export const enroll = async (courseId: number) => {
   const response = await apiClient.post('/enrollments/', { course: courseId });
   clearCourseDetailRequests();
   return response;
 };
 export const markLessonComplete = (enrollmentId: number, lessonId: number) =>
-  apiClient.post(`/enrollments/${enrollmentId}/mark_lesson_complete/`, { lesson_id: lessonId });
+  apiClient.post(`/enrollments/${enrollmentId}/mark_lesson_complete/`, { lesson_id: lessonId }, { timeout: AUTH_REQUEST_TIMEOUT });
 
 // ---- Quizzes ----
 export const createQuiz = (payload: any) => apiClient.post('/quizzes/', payload);
 export const getQuiz = (id: number) => apiClient.get(`/quizzes/${id}/`);
-export const getQuizzesForLesson = (lessonId: number) => apiClient.get('/quizzes/', { params: { lesson: lessonId } });
-export const getQuizzesForCourse = (courseId: number) => apiClient.get('/quizzes/', { params: { course: courseId } });
+export const getQuizzesForLesson = (lessonId: number) => apiClient.get('/quizzes/', { timeout: AUTH_REQUEST_TIMEOUT, params: { lesson: lessonId } });
+export const getQuizzesForCourse = (courseId: number) => apiClient.get('/quizzes/', { timeout: AUTH_REQUEST_TIMEOUT, params: { course: courseId } });
 export const updateQuiz = (id: number, payload: any) => apiClient.patch(`/quizzes/${id}/`, payload);
 export const deleteQuiz = (id: number) => apiClient.delete(`/quizzes/${id}/`);
 export const createQuestion = (payload: any) => apiClient.post('/questions/', payload);
@@ -276,17 +276,19 @@ export const submitQuiz = (quizId: number, answers: any[], durationSeconds = 0) 
   apiClient.post(`/quizzes/${quizId}/submit/`, { answers, duration_seconds: durationSeconds });
 
 // ---- Certificates ----
-export const getMyCertificates = () => apiClient.get('/certificates/');
+export const getMyCertificates = () => apiClient.get('/certificates/', { timeout: AUTH_REQUEST_TIMEOUT });
 export const verifyCertificate = (certificateId: string) => apiClient.get(`/verify/${encodeURIComponent(certificateId)}/`);
 
 // ---- AI Tutor ----
-export const getConversations = () => apiClient.get('/ai/conversations/');
-export const getConversation = (conversationId: number) => apiClient.get(`/ai/conversations/${conversationId}/`);
+export const getConversations = () => apiClient.get('/ai/conversations/', { timeout: AUTH_REQUEST_TIMEOUT });
+export const getConversation = (conversationId: number) => apiClient.get(`/ai/conversations/${conversationId}/`, { timeout: AUTH_REQUEST_TIMEOUT });
 export const createConversation = (mode: string, title: string, course?: number) =>
-  apiClient.post('/ai/conversations/', { mode, title, course });
-export const deleteConversation = (conversationId: number) => apiClient.delete(`/ai/conversations/${conversationId}/`);
+  apiClient.post('/ai/conversations/', { mode, title, course }, { timeout: AUTH_REQUEST_TIMEOUT });
+export const deleteConversation = (conversationId: number) => apiClient.delete(`/ai/conversations/${conversationId}/`, { timeout: AUTH_REQUEST_TIMEOUT });
 export const sendAIMessage = (conversationId: number, content: string) =>
-  apiClient.post(`/ai/conversations/${conversationId}/send_message/`, { content });
+  apiClient.post(`/ai/conversations/${conversationId}/send_message/`, { content }, { timeout: 120_000 });
+export const askBusinessAdvisor = (question: string) =>
+  apiClient.post('/ai/advisor/', { question }, { timeout: 120_000 });
 
 // ---- Platform services and analytics ----
 export const submitServiceRequest = (payload: { service: string; notes: string }) =>

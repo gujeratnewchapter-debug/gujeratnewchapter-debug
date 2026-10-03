@@ -1,12 +1,13 @@
-from rest_framework import viewsets, permissions
+from rest_framework import serializers, viewsets, permissions
 from rest_framework.exceptions import APIException, PermissionDenied
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.response import Response
+from rest_framework.throttling import SimpleRateThrottle
 from django.db import transaction
 from .models import Conversation, Message, KnowledgeDocument
 from .serializers import (
     ConversationSerializer, ConversationListSerializer, SendMessageSerializer,
-    MessageSerializer, KnowledgeDocumentSerializer,
+    MessageSerializer, KnowledgeDocumentSerializer, BusinessAdvisorQuestionSerializer,
 )
 from .services import AIServiceUnavailable, get_ai_reply
 
@@ -15,6 +16,37 @@ class AIServiceUnavailableResponse(APIException):
     status_code = 503
     default_detail = 'The AI service is temporarily unavailable. Please try again shortly.'
     default_code = 'service_unavailable'
+
+
+class BusinessAdvisorThrottle(SimpleRateThrottle):
+    scope = 'business_advisor'
+    rate = '10/min'
+
+    def get_rate(self):
+        return self.rate
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([permissions.AllowAny])
+@throttle_classes([BusinessAdvisorThrottle])
+def business_advisor(request):
+    serializer = BusinessAdvisorQuestionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        reply_text, sources = get_ai_reply(
+            Conversation.Mode.COACH,
+            [],
+            serializer.validated_data['question'],
+        )
+    except AIServiceUnavailable as error:
+        raise AIServiceUnavailableResponse(str(error)) from error
+
+    return Response({'content': reply_text, 'sources': sources})
 
 
 class ConversationViewSet(viewsets.ModelViewSet):

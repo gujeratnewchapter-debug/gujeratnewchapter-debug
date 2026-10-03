@@ -7,9 +7,8 @@ import {
   Compass, FileText, Handshake, Lightbulb, LineChart, MapPin, MessageCircle,
   Network, Search, ShieldCheck, Sparkles, Target, Users, WalletCards,
 } from 'lucide-react';
-import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
-import { createConversation, getPageContent, sendAIMessage, submitServiceRequest } from '@/lib/api';
+import { askBusinessAdvisor, getPageContent, submitServiceRequest } from '@/lib/api';
 
 const copy = {
   en: { eyebrow: 'Ethiopian Startup School', advisor: 'AI Business Advisor', ecosystem: 'Startup Ecosystem', services: 'Business Consultant', analytics: 'Platform intelligence', legal: 'Ethiopian Legal Business', about: 'About Ethiopian Startup School' },
@@ -77,15 +76,35 @@ export function AnalyticsPage() {
 }
 
 export function AdvisorPage() {
-  const { lang } = useI18n();
-  const { isAuthenticated } = useAuth();
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  async function ask(event: FormEvent) { event.preventDefault(); if (!question.trim()) return; setBusy(true); setAnswer(''); const prompt = `Act as an Ethiopia-focused startup advisor. Answer carefully and practically. Do not invent Ethiopian laws, regulations, taxes, licenses, or government procedures. When legal or tax accuracy matters, say what must be verified with the relevant Ethiopian authority or a qualified professional. User question: ${question}`; try { const conversation = await createConversation('coach', 'Ethiopian business advisor'); const result = await sendAIMessage(conversation.data.id, prompt); setAnswer(result.data.content); } catch { setAnswer(isAuthenticated ? 'The advisor is temporarily unavailable. Please verify legal and tax questions with an official Ethiopian authority or qualified professional.' : 'Sign in to connect to the advisor. For now, start with a specific question about your customer, market, business model, MVP, or funding plan.'); } finally { setBusy(false); } }
+  async function ask(event: FormEvent) {
+    event.preventDefault();
+    const prompt = question.trim();
+    if (!prompt) return;
+
+    setBusy(true);
+    setError('');
+    setAnswer('');
+    try {
+      const result = await askBusinessAdvisor(prompt);
+      setAnswer(result.data.content);
+    } catch (requestError: any) {
+      const detail = requestError?.response?.data?.detail;
+      setError(
+        typeof detail === 'string' && detail.trim()
+          ? detail
+          : 'Could not get an answer right now. Your question is still here; please try again.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   const tools = ['Business idea analysis', 'Market gaps and customer needs', 'Competitor and SWOT analysis', 'Business model and MVP planning', 'Valuation, funding, and pitch preparation', 'Marketing and growth planning'];
-  return <><PageIntro slug="ai-business-advisor" title="Ethiopia-focused AI Business Advisor" description="Turn a business question into a practical next step. The advisor is designed to distinguish general guidance from legal or tax matters that require official verification." icon={MessageCircle} />
-    <section className="container" style={{ paddingBottom: 64, display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(240px, .75fr)', gap: 20 }}><div className="card" style={{ padding: 24 }}><div className="badge" style={{ marginBottom: 16 }}><MessageCircle size={13} /> Advisor workspace</div><form onSubmit={ask}><label className="label" htmlFor="advisor-question">What are you working through?</label><textarea id="advisor-question" className="input" rows={6} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: How can I validate a logistics problem for small businesses in Addis Ababa?" /><button className="btn btn-primary" type="submit" disabled={busy} style={{ marginTop: 14 }}>{busy ? 'Thinking...' : 'Ask the advisor'} <ArrowRight size={16} /></button></form>{answer && <div style={{ marginTop: 22, padding: 18, background: 'var(--soft-green)', borderLeft: '4px solid var(--brand)', whiteSpace: 'pre-wrap' }}>{answer}</div>}</div><aside className="feature-card"><h2 style={{ fontSize: 20, marginTop: 0 }}>Explore a tool</h2>{tools.map((tool) => <div key={tool} style={{ display: 'flex', gap: 9, alignItems: 'start', padding: '11px 0', borderBottom: '1px solid var(--border)', fontSize: 14 }}><CheckCircle2 size={16} color="var(--brand-dark)" />{tool}</div>)}<p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>Legal and tax answers should always be checked against current official sources.</p></aside></section></>;
+  return <><PageIntro slug="ai-business-advisor" title="AI Startup & Business Advisor" description="Ask about startup ideas, customers, markets, products, pricing, operations, funding, marketing, growth, and related business questions." icon={MessageCircle} />
+    <section className="container" style={{ paddingBottom: 64, display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(240px, .75fr)', gap: 20 }}><div className="card" style={{ padding: 24 }}><div className="badge" style={{ marginBottom: 16 }}><MessageCircle size={13} /> Advisor workspace</div><form onSubmit={ask}><label className="label" htmlFor="advisor-question">What are you working through?</label><textarea id="advisor-question" className="input" rows={6} maxLength={4000} required value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: How can I validate a logistics problem for small businesses in Addis Ababa?" /><button className="btn btn-primary" type="submit" disabled={busy || !question.trim()} style={{ marginTop: 14 }}>{busy ? 'Thinking...' : 'Ask the advisor'} <ArrowRight size={16} /></button></form>{error && <p role="alert" style={{ color: 'var(--danger)', marginTop: 18 }}>{error}</p>}{answer && <div style={{ marginTop: 22, padding: 18, background: 'var(--soft-green)', borderLeft: '4px solid var(--brand)', whiteSpace: 'pre-wrap' }}>{answer}</div>}</div><aside className="feature-card"><h2 style={{ fontSize: 20, marginTop: 0 }}>Explore a tool</h2>{tools.map((tool) => <div key={tool} style={{ display: 'flex', gap: 9, alignItems: 'start', padding: '11px 0', borderBottom: '1px solid var(--border)', fontSize: 14 }}><CheckCircle2 size={16} color="var(--brand-dark)" />{tool}</div>)}<p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>Ask a startup or related business question to get practical guidance.</p></aside></section></>;
 }
 
 const services = ['Start a Business', 'Market Research', 'MVP Builder', 'Business Valuation', 'Business Plan', 'Pitch Deck', 'Startup Strategy', 'Legal Business Guidance', 'Mentor Matching'];

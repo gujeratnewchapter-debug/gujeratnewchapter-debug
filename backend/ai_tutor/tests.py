@@ -105,3 +105,47 @@ class AIMessageTests(APITestCase):
 				get_ai_reply('tutor', [], 'How do I validate a business idea?')
 
 		self.assertIn('not configured', str(context.exception))
+
+
+class PublicBusinessAdvisorTests(APITestCase):
+	@patch('ai_tutor.views.get_ai_reply', return_value=('Try a small paid pilot with five customers.', []))
+	def test_anonymous_users_can_ask_startup_questions(self, get_reply):
+		response = self.client.post(
+			'/api/ai/advisor/',
+			{'question': 'How can I test demand for a new logistics startup?'},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.json()['content'], 'Try a small paid pilot with five customers.')
+		get_reply.assert_called_once_with(
+			Conversation.Mode.COACH,
+			[],
+			'How can I test demand for a new logistics startup?',
+		)
+
+	@patch('ai_tutor.views.get_ai_reply', side_effect=AIServiceUnavailable('The provider is unavailable.'))
+	def test_provider_errors_are_reported_without_a_misleading_fallback(self, _get_reply):
+		response = self.client.post(
+			'/api/ai/advisor/',
+			{'question': 'How should I price my startup product?'},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 503)
+		self.assertEqual(response.json()['detail'], 'The provider is unavailable.')
+
+	def test_blank_or_oversized_advisor_questions_are_rejected(self):
+		blank_response = self.client.post(
+			'/api/ai/advisor/',
+			{'question': '   '},
+			format='json',
+		)
+		oversized_response = self.client.post(
+			'/api/ai/advisor/',
+			{'question': 'x' * 4001},
+			format='json',
+		)
+
+		self.assertEqual(blank_response.status_code, 400)
+		self.assertEqual(oversized_response.status_code, 400)
