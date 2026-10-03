@@ -14,16 +14,18 @@ const ICONS: Record<string, any> = {
   interactive_html: Code, coding_exercise: Code, audio: Headphones, live_session: Radio,
 };
 
-function getLessonRedirectUrl(targetCourse: any, fallbackSlug: string) {
+function getLessonRedirectUrl(targetCourse: any, fallbackSlug: string): string | null {
   const allLessons = targetCourse?.sections?.flatMap((section: any) => section.lessons ?? []) ?? [];
-  const nextLesson = allLessons.find((lesson: any) => lesson && lesson.id != null && (lesson.is_unlocked !== false || lesson.is_preview)) ?? allLessons[0];
+  const nextLesson = allLessons.find(
+    (lesson: any) => lesson?.id != null && (lesson.is_unlocked !== false || lesson.is_preview),
+  );
   const targetSlug = targetCourse?.slug || fallbackSlug;
 
   if (nextLesson?.id) {
     return `/courses/${targetSlug}/lessons/${nextLesson.id}`;
   }
 
-  return `/courses/${targetSlug}`;
+  return null;
 }
 
 export default function CourseDetailPage() {
@@ -34,6 +36,7 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<any>(null);
   const [enrollment, setEnrollment] = useState<any>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [openingLesson, setOpeningLesson] = useState(false);
   const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [courseError, setCourseError] = useState<string | null>(null);
@@ -126,13 +129,21 @@ export default function CourseDetailPage() {
 
   const continueLearning = React.useCallback(async (targetCourse: any) => {
     setEnrollmentError(null);
+    setOpeningLesson(true);
     try {
       const { data: accessibleCourse } = await getCourse(targetCourse.id, true);
       setCourse(accessibleCourse);
-      router.push(getLessonRedirectUrl(accessibleCourse, slug));
+      const lessonUrl = getLessonRedirectUrl(accessibleCourse, slug);
+      if (!lessonUrl) {
+        setEnrollmentError('No accessible lessons were returned for this course. Please try again.');
+        return;
+      }
+      router.push(lessonUrl);
     } catch (err) {
       console.error('Failed to load enrolled course lessons:', err);
       setEnrollmentError('You’re enrolled, but course lessons could not be loaded. Please try again.');
+    } finally {
+      setOpeningLesson(false);
     }
   }, [router, slug]);
 
@@ -370,10 +381,10 @@ export default function CourseDetailPage() {
             {enrollment ? (
               <>
                 <p style={{ fontSize: 13, color: 'var(--brand)', marginBottom: 10 }}>✓ You&apos;re enrolled — {enrollment.progress_percent}% complete</p>
-                <button className="btn btn-primary course-action-button" style={{ width: '100%', marginBottom: 10 }} onClick={() => {
+                <button className="btn btn-primary course-action-button" style={{ width: '100%', marginBottom: 10 }} disabled={openingLesson} onClick={() => {
                   void continueLearning(course);
                 }}>
-                  Continue learning
+                  {openingLesson ? 'Opening your lesson...' : 'Continue learning'}
                 </button>
                 {enrollmentError && <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{enrollmentError}</p>}
                 <button className="btn course-action-button" style={{ width: '100%' }} onClick={() => router.push(`/ai-tutor?course=${course.id}`)}>
