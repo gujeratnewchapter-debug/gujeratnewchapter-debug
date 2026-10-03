@@ -1,13 +1,20 @@
 from rest_framework import viewsets, permissions
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import transaction
 from .models import Conversation, Message, KnowledgeDocument
 from .serializers import (
     ConversationSerializer, ConversationListSerializer, SendMessageSerializer,
     MessageSerializer, KnowledgeDocumentSerializer,
 )
-from .services import get_ai_reply
+from .services import AIServiceUnavailable, get_ai_reply
+
+
+class AIServiceUnavailableResponse(APIException):
+    status_code = 503
+    default_detail = 'The AI service is temporarily unavailable. Please try again shortly.'
+    default_code = 'service_unavailable'
 
 
 class ConversationViewSet(viewsets.ModelViewSet):
@@ -32,20 +39,23 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user_content = serializer.validated_data['content']
 
-        Message.objects.create(conversation=conversation, role=Message.Role.USER, content=user_content)
-
         history = [
             {"role": m.role, "content": m.content}
             for m in conversation.messages.order_by('created_at')[:20]
         ]
-        reply_text, sources = get_ai_reply(
-            conversation.mode, history, user_content, course=conversation.course,
-        )
+        try:
+            reply_text, sources = get_ai_reply(
+                conversation.mode, history, user_content, course=conversation.course,
+            )
+        except AIServiceUnavailable as error:
+            raise AIServiceUnavailableResponse(str(error)) from error
 
-        assistant_msg = Message.objects.create(
-            conversation=conversation, role=Message.Role.ASSISTANT, content=reply_text, sources=sources,
-        )
-        conversation.save()  # bumps updated_at
+        with transaction.atomic():
+            Message.objects.create(conversation=conversation, role=Message.Role.USER, content=user_content)
+            assistant_msg = Message.objects.create(
+                conversation=conversation, role=Message.Role.ASSISTANT, content=reply_text, sources=sources,
+            )
+            conversation.save()  # bumps updated_at
         return Response(MessageSerializer(assistant_msg).data)
 
 

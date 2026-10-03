@@ -22,6 +22,14 @@ services:
         value: https://ethiopian-startup-school-frontend.vercel.app
       - key: GUNICORN_WORKERS
         value: "3"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: openai/gpt-4o-mini
       - key: DJANGO_SECRET_KEY
         sync: false
       - key: DATABASE_URL

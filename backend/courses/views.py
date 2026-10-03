@@ -96,6 +96,8 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        if self.action == 'retrieve':
+            qs = qs.prefetch_related('sections__lessons__resources')
         user = self.request.user
         if not user.is_authenticated or user.is_student:
             # Guests & students only see published courses

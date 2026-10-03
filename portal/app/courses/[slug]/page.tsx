@@ -2,9 +2,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import { ChevronDown, Lock, PlayCircle, FileText, Presentation, Headphones, Code, Radio, BookOpen } from 'lucide-react';
 import { getCourses, getMyEnrollments, enroll, getCourse, getQuizzesForCourse } from '@/lib/api';
+import { ApiImage } from '@/components/ApiImage';
 import { useAuth } from '@/lib/auth-context';
 import { InnovationLoader } from '@/components/InnovationLoader';
 import { sanitizeRichText } from '@/lib/sanitize-html';
@@ -124,6 +124,18 @@ export default function CourseDetailPage() {
       });
   }, [course?.id, isBackendAuthenticated]);
 
+  const continueLearning = React.useCallback(async (targetCourse: any) => {
+    setEnrollmentError(null);
+    try {
+      const { data: accessibleCourse } = await getCourse(targetCourse.id, true);
+      setCourse(accessibleCourse);
+      router.push(getLessonRedirectUrl(accessibleCourse, slug));
+    } catch (err) {
+      console.error('Failed to load enrolled course lessons:', err);
+      setEnrollmentError('You’re enrolled, but course lessons could not be loaded. Please try again.');
+    }
+  }, [router, slug]);
+
   const enrollInCourse = React.useCallback(async (targetCourse: any) => {
     setEnrollmentError(null);
     setEnrolling(true);
@@ -133,13 +145,13 @@ export default function CourseDetailPage() {
         .find((item: any) => item.course === targetCourse.id);
       if (existingEnrollment) {
         setEnrollment(existingEnrollment);
-        router.push(getLessonRedirectUrl(targetCourse, slug));
+        await continueLearning(targetCourse);
         return;
       }
 
       const { data } = await enroll(targetCourse.id);
       setEnrollment(data);
-      router.push(getLessonRedirectUrl(targetCourse, slug));
+      await continueLearning(targetCourse);
     } catch (err: any) {
       console.error('Failed to enroll in course:', err);
       setEnrollmentError(
@@ -148,7 +160,7 @@ export default function CourseDetailPage() {
     } finally {
       setEnrolling(false);
     }
-  }, [router, slug]);
+  }, [continueLearning]);
 
   useEffect(() => {
     if (
@@ -248,6 +260,11 @@ export default function CourseDetailPage() {
           <p style={{ fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: 'var(--brand)', marginBottom: 10 }}>Course unavailable</p>
           <h1 style={{ fontSize: 28, marginBottom: 10 }}>We couldn’t load this course</h1>
           <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>{courseError || 'This course could not be found.'}</p>
+          <button className="btn btn-primary" style={{ marginRight: 10 }} onClick={() => {
+            setCourseError(null);
+            setLoading(true);
+            void loadRef.current(true);
+          }}>Try again</button>
           <button className="btn btn-primary" onClick={() => router.push('/courses')}>Browse courses</button>
         </div>
       </div>
@@ -263,7 +280,7 @@ export default function CourseDetailPage() {
           <p style={{ color: 'var(--text-muted)', fontSize: 15, marginBottom: 4 }}>{course.subtitle}</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '12px 0 20px' }}>
             {course.instructor_photo ? (
-              <Image src={course.instructor_photo} alt={course.instructor_name} width={32} height={32} style={{ borderRadius: '50%' }} unoptimized />
+              <ApiImage src={course.instructor_photo} alt={course.instructor_name} width={32} height={32} fallbackSrc="/favicon.svg" style={{ borderRadius: '50%' }} />
             ) : (
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--surface-2)' }} />
             )}
@@ -345,7 +362,7 @@ export default function CourseDetailPage() {
         <div>
           <div className="card">
             <div style={{ height: 160, background: 'var(--surface-2)', borderRadius: 10, marginBottom: 16, position: 'relative', overflow: 'hidden' }}>
-              {course.thumbnail && <Image src={course.thumbnail} alt={course.title} fill style={{ objectFit: 'cover' }} unoptimized />}
+              <ApiImage src={course.thumbnail} alt={course.title} fill sizes="(max-width: 900px) 100vw, 280px" style={{ objectFit: 'cover' }} />
             </div>
             <p style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
               {course.is_free ? 'Free' : `${course.price} ETB`}
@@ -354,13 +371,11 @@ export default function CourseDetailPage() {
               <>
                 <p style={{ fontSize: 13, color: 'var(--brand)', marginBottom: 10 }}>✓ You&apos;re enrolled — {enrollment.progress_percent}% complete</p>
                 <button className="btn btn-primary course-action-button" style={{ width: '100%', marginBottom: 10 }} onClick={() => {
-                  const allLessons = course.sections?.flatMap((section: any) => section.lessons ?? []) ?? [];
-                  const firstAvailable = allLessons.find((lesson: any) => lesson && lesson.is_unlocked !== false) ?? allLessons[0];
-                  if (firstAvailable?.id) router.push(`/courses/${slug}/lessons/${firstAvailable.id}`);
-                  else router.push(`/courses/${slug}`);
+                  void continueLearning(course);
                 }}>
                   Continue learning
                 </button>
+                {enrollmentError && <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{enrollmentError}</p>}
                 <button className="btn course-action-button" style={{ width: '100%' }} onClick={() => router.push(`/ai-tutor?course=${course.id}`)}>
                   Ask the AI Tutor about this course
                 </button>

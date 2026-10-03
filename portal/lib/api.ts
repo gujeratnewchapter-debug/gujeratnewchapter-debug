@@ -161,6 +161,7 @@ export const googleLogin = (id_token: string, role: 'student' | 'instructor' = '
   apiClient.post('/auth/login/google/', { id_token, role }, { timeout: AUTH_REQUEST_TIMEOUT });
 
 export function setDjangoAuthToken(accessToken: string | null) {
+  clearCourseDetailRequests();
   if (accessToken) {
     try {
       localStorage.setItem('django_access', accessToken);
@@ -173,6 +174,7 @@ export function setDjangoAuthToken(accessToken: string | null) {
 }
 
 export function clearDjangoAuthToken() {
+  clearCourseDetailRequests();
   try { localStorage.removeItem('django_access'); localStorage.removeItem('django_refresh'); } catch (e) { /* ignore */ }
 }
 
@@ -192,7 +194,19 @@ export function getCourse(id: number | string, forceRefresh = false) {
   const cached = courseDetailRequests.get(key);
   if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.promise;
 
-  const promise = apiClient.get(`/courses/${id}/`, { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } })
+  const request = () => apiClient.get(`/courses/${id}/`, {
+    timeout: PUBLIC_CONTENT_TIMEOUT,
+    params: { _fresh: Date.now() },
+  });
+  const promise = request()
+    .catch(async (error) => {
+      if (!axios.isAxiosError(error) || (error.response && error.response.status < 500)) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return request();
+    })
     .catch((error) => {
       courseDetailRequests.delete(key);
       throw error;
@@ -237,7 +251,11 @@ export const replaceVideoResources = (lesson: number, urls: string[]) => apiClie
 // ---- Enrollments ----
 export const getMyEnrollments = () => apiClient.get('/enrollments/');
 export const getEnrollmentProgress = (enrollmentId: number) => apiClient.get(`/enrollments/${enrollmentId}/progress/`);
-export const enroll = (courseId: number) => apiClient.post('/enrollments/', { course: courseId });
+export const enroll = async (courseId: number) => {
+  const response = await apiClient.post('/enrollments/', { course: courseId });
+  clearCourseDetailRequests();
+  return response;
+};
 export const markLessonComplete = (enrollmentId: number, lessonId: number) =>
   apiClient.post(`/enrollments/${enrollmentId}/mark_lesson_complete/`, { lesson_id: lessonId });
 

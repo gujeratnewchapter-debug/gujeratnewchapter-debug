@@ -16,6 +16,9 @@ load_dotenv(BASE_DIR / '.env')
 load_dotenv(BASE_DIR.parent / 'portal' / '.env.local')
 
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
+DEFAULT_RENDER_HOST = 'ethiopian-startup-school-api.onrender.com'
+DEFAULT_FRONTEND_HOST = 'https://ethiopian-startup-school-frontend.vercel.app'
+DEFAULT_LOCAL_FRONTEND = 'http://localhost:3000'
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 if not SECRET_KEY:
@@ -28,7 +31,7 @@ ALLOWED_HOSTS = [host.strip() for host in configured_hosts.split(',') if host.st
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 elif not DEBUG and not ALLOWED_HOSTS:
-    raise RuntimeError('DJANGO_ALLOWED_HOSTS must be set when DJANGO_DEBUG is false.')
+    ALLOWED_HOSTS = [DEFAULT_RENDER_HOST]
 
 # If Vercel sets VERCEL_URL in the environment during build, allow it through
 vercel_url = os.environ.get('VERCEL_URL')
@@ -222,17 +225,17 @@ if cors_env:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in cors_env.split(',') if o.strip()]
 else:
     CORS_ALLOWED_ORIGINS = [
-        'http://localhost:3000',
+        DEFAULT_LOCAL_FRONTEND,
         'http://127.0.0.1:3000',
         'http://localhost:3001',
         'http://127.0.0.1:3001',
         'http://localhost:3002',
         'http://127.0.0.1:3002',
+        f'https://{DEFAULT_RENDER_HOST}',
+        DEFAULT_FRONTEND_HOST,
     ]
 
-frontend_base_url = os.environ.get('FRONTEND_BASE_URL', '').rstrip('/')
-if not DEBUG and not frontend_base_url:
-    raise RuntimeError('FRONTEND_BASE_URL must be set when DJANGO_DEBUG is false.')
+frontend_base_url = os.environ.get('FRONTEND_BASE_URL', DEFAULT_FRONTEND_HOST if not DEBUG else DEFAULT_LOCAL_FRONTEND).rstrip('/')
 if frontend_base_url and frontend_base_url not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append(frontend_base_url)
 
@@ -308,7 +311,7 @@ if (
     raise RuntimeError('EMAIL_HOST must be set when DJANGO_DEBUG is false.')
 
 # Frontend base URL used by verification links and certificate URLs.
-FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:3000')
+FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', DEFAULT_FRONTEND_HOST if not DEBUG else DEFAULT_LOCAL_FRONTEND)
 
 # Supabase token verification. Prefer the explicit JWKS URL, but derive the
 # standard endpoint when only the project URL is configured.
@@ -336,14 +339,11 @@ if not DEBUG and not (SUPABASE_JWT_SECRET or SUPABASE_JWKS_URL):
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
 GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '')
 
-# AI provider settings are optional; the tutor has a local fallback when no
-# provider key is configured.
+# Configure at least one provider key on the backend to enable AI responses.
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
-AI_MODEL = os.environ.get(
-    'OPENROUTER_MODEL',
-    os.environ.get('AI_MODEL', 'openai/gpt-4o-mini'),
-)
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', os.environ.get('AI_MODEL', 'gpt-4o-mini'))
+OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'openai/gpt-4o-mini')
 OPENROUTER_BASE_URL = os.environ.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
 AI_SITE_URL = os.environ.get('AI_SITE_URL', FRONTEND_BASE_URL)
 AI_SITE_NAME = os.environ.get('AI_SITE_NAME', 'Ethiopian Startup School')

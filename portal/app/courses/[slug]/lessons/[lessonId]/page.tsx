@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
 import { getCourses, getCourse, getLesson, getMyEnrollments, getMyCertificates, getEnrollmentProgress, markLessonComplete, getSection, getQuizzesForLesson, getQuizzesForCourse } from '@/lib/api';
@@ -11,7 +11,7 @@ import { sanitizeRichText } from '@/lib/sanitize-html';
 export default function LessonPage() {
   const { slug, lessonId } = useParams<{ slug: string; lessonId: string }>();
   const router = useRouter();
-  const { isBackendAuthenticated } = useAuth();
+  const { isBackendAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [lesson, setLesson] = useState<any>(null);
   const [course, setCourse] = useState<any>(null);
   const [enrollment, setEnrollment] = useState<any>(null);
@@ -90,11 +90,7 @@ export default function LessonPage() {
   const lessonNumber = currentLessonIndex >= 0 ? currentLessonIndex + 1 : 1;
   const lessonProgress = allLessons.length ? Math.round((lessonNumber / allLessons.length) * 100) : 0;
 
-  useEffect(() => {
-    load();
-  }, [lessonId]);
-
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const courseSearch = await getCourses({ search: slug });
       const courseMatches = courseSearch.data.results ?? courseSearch.data;
@@ -104,7 +100,7 @@ export default function LessonPage() {
         router.replace('/courses');
         return;
       }
-      const currentCourseDetail = (await getCourse(currentCourse.id)).data;
+      const currentCourseDetail = (await getCourse(currentCourse.id, true)).data;
       const currentLesson = currentCourseDetail.sections?.flatMap((section: any) => section.lessons ?? [])
         .find((item: any) => item.id === Number(lessonId));
       if (!currentLesson) {
@@ -179,7 +175,11 @@ export default function LessonPage() {
       setLoadError(true);
       router.replace(`/courses/${slug}`);
     }
-  }
+  }, [isBackendAuthenticated, lessonId, router, slug]);
+
+  useEffect(() => {
+    if (!isAuthLoading) void load();
+  }, [isAuthLoading, load]);
 
   async function handleComplete() {
     if (!enrollment) return;

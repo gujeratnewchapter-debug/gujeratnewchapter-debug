@@ -11,6 +11,11 @@ embedding-similarity search when a vector store is wired up.
 from django.conf import settings
 from .models import KnowledgeDocument
 
+
+class AIServiceUnavailable(Exception):
+    """Raised when the configured AI provider cannot produce a reply."""
+
+
 SYSTEM_PROMPTS = {
     'tutor': (
         "You are an AI Tutor for an online startup & business education platform. "
@@ -83,26 +88,27 @@ def get_ai_reply(mode, conversation_history, user_message, course=None):
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_message})
 
-    api_key = getattr(settings, 'OPENROUTER_API_KEY', '') or getattr(settings, 'OPENAI_API_KEY', '')
+    openrouter_api_key = getattr(settings, 'OPENROUTER_API_KEY', '')
+    openai_api_key = getattr(settings, 'OPENAI_API_KEY', '')
+    api_key = openrouter_api_key or openai_api_key
     if not api_key:
-        # Dev-mode fallback so the app runs without an API key configured
-        return (
-            "[AI Tutor - dev mode: configure OPENROUTER_API_KEY to enable real responses] "
-            f"I received your question: '{user_message}'.",
-            sources,
+        raise AIServiceUnavailable(
+            'The AI assistant is not configured on the server. Please contact the site administrator.'
         )
 
     try:
         from openai import OpenAI
         client_kwargs = {'api_key': api_key}
-        if getattr(settings, 'OPENROUTER_API_KEY', ''):
+        if openrouter_api_key:
             client_kwargs['base_url'] = getattr(settings, 'OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
             client_kwargs['default_headers'] = {
                 'HTTP-Referer': getattr(settings, 'AI_SITE_URL', ''),
                 'X-Title': getattr(settings, 'AI_SITE_NAME', 'Ethiopian Startup School'),
             }
-        client = OpenAI(**client_kwargs)
-        model = getattr(settings, 'AI_MODEL', 'gpt-4o-mini')
+            model = getattr(settings, 'OPENROUTER_MODEL', 'openai/gpt-4o-mini')
+        else:
+            model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
+        client = OpenAI(**client_kwargs, timeout=45, max_retries=0)
         last_error = None
         for attempt in range(2):
             try:
@@ -112,9 +118,14 @@ def get_ai_reply(mode, conversation_history, user_message, course=None):
                     max_tokens=800,
                 )
                 reply = response.choices[0].message.content
+                if not reply or not reply.strip():
+                    raise ValueError('AI provider returned an empty response')
                 return reply, sources
             except Exception as error:
                 last_error = error
+                if attempt == 0:
+                    import time
+                    time.sleep(0.5)
         import logging
         logging.getLogger(__name__).warning(
             'AI provider request failed after retry: %s (%s)',
@@ -124,10 +135,6 @@ def get_ai_reply(mode, conversation_history, user_message, course=None):
     except Exception as error:
         import logging
         logging.getLogger(__name__).warning('AI client setup failed: %s', type(error).__name__)
-        # Keep chat usable when the provider is unavailable, misconfigured, or
-        # rate-limited; provider details must not leak to the student.
-    return (
-        "The AI service is temporarily unavailable. "
-        "Please try again shortly, or ask your instructor about this lesson.",
-        sources,
-    )
+    raise AIServiceUnavailable(
+        'The AI service is temporarily unavailable. Please try again shortly.'
+    ) from None
