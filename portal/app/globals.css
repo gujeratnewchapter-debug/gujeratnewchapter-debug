@@ -2837,3 +2837,206 @@ button, a, input, textarea, select { touch-action: manipulation; }
     transition: none;
   }
 }
+
+/* Keep the homepage artwork present without letting it dominate the first fold. */
+.home-hero.compact-home-hero {
+  min-height: 420px !important;
+  padding: 26px 0 !important;
+}
+
+.home-hero.compact-home-hero .home-hero-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 52px);
+  min-height: 368px;
+}
+
+.home-hero.compact-home-hero .home-hero-image {
+  order: 2;
+  width: 100%;
+  height: clamp(290px, 29vw, 360px);
+  aspect-ratio: auto;
+}
+
+.home-hero.compact-home-hero .home-hero-copy {
+  order: 1;
+  max-width: 570px;
+  text-align: left;
+}
+
+.home-hero.compact-home-hero .home-hero-copy .hero-title {
+  max-width: 17ch;
+  margin-inline: 0 !important;
+  font-size: clamp(2.15rem, 3.5vw, 2.8rem) !important;
+  line-height: 1.08 !important;
+}
+
+.home-hero.compact-home-hero .home-hero-copy .hero-subtitle {
+  max-width: 520px !important;
+  margin: 0 0 16px !important;
+  font-size: 15px !important;
+  line-height: 1.55;
+}
+
+.home-hero.compact-home-hero .home-search-form {
+  max-width: 560px !important;
+  margin: 0 !important;
+}
+
+.home-hero.compact-home-hero .home-course-count {
+  margin-top: 12px !important;
+}
+
+/* Treat the news index as an editorial page header, not a second landing page. */
+.news-index-hero {
+  padding: 34px 0 39px;
+}
+
+.news-index-hero .news-back-link {
+  margin-bottom: 23px;
+}
+
+.news-index-hero h1 {
+  max-width: 760px;
+  font-size: clamp(2.65rem, 5vw, 3.8rem) !important;
+  line-height: 0.98 !important;
+}
+
+.news-index-intro {
+  max-width: 470px;
+  margin-top: 15px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.news-index-count {
+  margin-top: 14px;
+}
+
+.news-index-motif {
+  top: 8%;
+  width: clamp(155px, 21vw, 270px);
+}
+
+/* Bring article metadata and title closer to the image while preserving crop. */
+.news-article-header {
+  padding-top: 24px;
+}
+
+.news-article-heading {
+  margin: 29px auto 28px;
+}
+
+.news-article-category {
+  margin-bottom: 11px;
+}
+
+.news-article-deck {
+  margin-top: 14px;
+}
+
+.news-article-byline {
+  margin-top: 16px;
+}
+
+.news-article-hero {
+  height: clamp(280px, 34vw, 400px);
+}
+
+@media (max-width: 760px) {
+  .home-hero.compact-home-hero {
+    min-height: 0 !important;
+    padding: 18px 0 20px !important;
+  }
+
+  .home-hero.compact-home-hero .home-hero-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+    min-height: 0;
+  }
+
+  .home-hero.compact-home-hero .home-hero-copy {
+    max-width: 620px;
+    text-align: center;
+  }
+
+  .home-hero.compact-home-hero .home-hero-copy .hero-title {
+    max-width: 22ch;
+    margin-inline: auto !important;
+    font-size: clamp(1.8rem, 7.5vw, 2.25rem) !important;
+    line-height: 1.1 !important;
+  }
+
+  .home-hero.compact-home-hero .home-hero-copy .hero-subtitle {
+    margin: 0 auto 13px !important;
+    font-size: 14px !important;
+  }
+
+  .home-hero.compact-home-hero .home-search-form {
+    margin-inline: auto !important;
+  }
+
+  .home-hero.compact-home-hero .home-hero-image {
+    order: 2;
+    height: clamp(155px, 52vw, 210px);
+    border-radius: 10px;
+  }
+
+  .news-index-hero {
+    padding: 25px 0 30px;
+  }
+
+  .news-index-hero .news-back-link {
+    margin-bottom: 20px;
+  }
+
+  .news-index-hero h1 {
+    max-width: 540px;
+    font-size: clamp(2.15rem, 9.3vw, 3rem) !important;
+    line-height: 0.98 !important;
+  }
+
+  .news-index-intro {
+    max-width: 340px;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+
+  .news-index-count {
+    margin-top: 11px;
+  }
+
+  .news-index-motif {
+    right: -55px;
+    bottom: -62px;
+    width: 175px;
+  }
+
+  .news-article-header {
+    padding-top: 19px;
+  }
+
+  .news-article-heading {
+    margin: 24px auto 20px;
+  }
+
+  .news-article-category {
+    margin-bottom: 9px;
+  }
+
+  .news-article-deck {
+    margin-top: 12px;
+  }
+
+  .news-article-byline {
+    margin-top: 13px;
+  }
+
+  .news-article-hero {
+    width: 100%;
+    height: clamp(180px, 64vw, 260px);
+    min-height: 0;
+    max-height: 260px;
+  }
+}
