@@ -227,15 +227,25 @@ class LessonViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return qs.filter(is_preview=True)
 
-        from enrollments.models import Enrollment, is_lesson_unlocked
+        from enrollments.models import get_course_lesson_unlocks
         candidate_lessons = qs.filter(
             Q(is_preview=True) |
             Q(section__course__enrollments__student=user)
         ).select_related('section__course').distinct()
-        accessible_ids = [
-            lesson.id for lesson in candidate_lessons
-            if lesson.is_preview or is_lesson_unlocked(user, lesson)
-        ]
+        candidate_lessons = list(candidate_lessons)
+        accessible_ids = [lesson.id for lesson in candidate_lessons if lesson.is_preview]
+        enrolled_course_ids = {
+            lesson.section.course_id
+            for lesson in candidate_lessons
+            if not lesson.is_preview
+        }
+        for course_id in enrolled_course_ids:
+            unlocked = get_course_lesson_unlocks(user, course_id)
+            accessible_ids.extend(
+                lesson_id
+                for lesson_id, is_unlocked in unlocked.items()
+                if is_unlocked
+            )
         return qs.filter(id__in=accessible_ids)
 
     def perform_create(self, serializer):

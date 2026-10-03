@@ -13,7 +13,7 @@ User = get_user_model()
 
 
 class EnrolledCourseDetailPerformanceTests(APITestCase):
-    def test_enrolled_large_course_detail_uses_bounded_queries(self):
+    def setUp(self):
         instructor = User.objects.create_user(
             username='performance-instructor',
             email='performance-instructor@example.com',
@@ -52,9 +52,12 @@ class EnrolledCourseDetailPerformanceTests(APITestCase):
             score_percent=100,
         )
         self.client.force_authenticate(student)
+        self.course = course
+        self.lessons = lessons
 
+    def test_enrolled_large_course_detail_uses_bounded_queries(self):
         with CaptureQueriesContext(connection) as queries:
-            response = self.client.get(reverse('course-detail', args=[course.id]))
+            response = self.client.get(reverse('course-detail', args=[self.course.id]))
 
         self.assertEqual(response.status_code, 200)
         serialized_lessons = [
@@ -62,6 +65,14 @@ class EnrolledCourseDetailPerformanceTests(APITestCase):
             for section_data in response.data['sections']
             for lesson in section_data['lessons']
         ]
-        self.assertEqual(len(serialized_lessons), len(lessons))
+        self.assertEqual(len(serialized_lessons), len(self.lessons))
         self.assertTrue(all(lesson['is_unlocked'] for lesson in serialized_lessons))
+        self.assertLessEqual(len(queries), 12)
+
+    def test_enrolled_large_course_lesson_uses_bounded_queries(self):
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse('lesson-detail', args=[self.lessons[0].id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], self.lessons[0].id)
         self.assertLessEqual(len(queries), 12)

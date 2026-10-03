@@ -213,7 +213,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             unlocked = {}
             if user.is_authenticated:
                 from enrollments.models import get_course_lesson_unlocks
-                unlocked = get_course_lesson_unlocks(user, instance)
+                unlocked = get_course_lesson_unlocks(user, instance.id)
                 if not privileged:
                     from enrollments.models import Enrollment
                     enrolled = Enrollment.objects.filter(

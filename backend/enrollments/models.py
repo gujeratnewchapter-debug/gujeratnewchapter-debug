@@ -40,9 +40,9 @@ def is_lesson_unlocked(student, lesson):
     return True
 
 
-def get_course_lesson_unlocks(student, course):
+def get_course_lesson_unlocks(student, course_id):
     lessons = list(
-        Lesson.objects.filter(section__course=course)
+        Lesson.objects.filter(section__course_id=course_id)
         .select_related('section')
         .prefetch_related('quiz', 'section__quizzes')
         .order_by('section__order', 'order')
