@@ -10,6 +10,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost' },
       { protocol: 'http', hostname: '127.0.0.1' },
+      { protocol: 'https', hostname: 'ethiopian-startup-school-api.onrender.com' },
       { protocol: 'https', hostname: '**' },
     ],
   },

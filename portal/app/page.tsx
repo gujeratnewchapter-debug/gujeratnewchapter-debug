@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Search, Sparkles, GraduationCap, Rocket, LineChart, Award, BookOpen, Users } from 'lucide-react';
+import { Search, GraduationCap, Rocket, LineChart, Award, BookOpen, Users } from 'lucide-react';
 
-import { getCourses, getCategories, getSiteSettings, getPageContent } from '@/lib/api';
+import { getCourses, getCategories, getSiteSettings, getPageContent, resolveMediaUrl } from '@/lib/api';
+import { ApiImage } from '@/components/ApiImage';
 
 function getHeroImageSource(heroSettings: any) {
   const uploadedSources = (heroSettings?.hero_images ?? [])
@@ -23,7 +23,7 @@ function getHeroImageSource(heroSettings: any) {
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { CourseCard } from '@/components/CourseCard';
-import { TechVisuals } from '@/components/TechVisuals';
+import { HomeNewsSection } from '@/components/HomeNewsSection';
 
 const AI_MODES = [
   { icon: GraduationCap, label: 'AI Tutor', mode: 'tutor', desc: 'Explains concepts, summarizes lessons, and drills you with practice quizzes whenever you\u2019re stuck.' },
@@ -36,42 +36,54 @@ const STEPS = [
   { title: 'Learn with AI at every step', desc: 'Watch, read, and ask your AI Tutor questions the moment something didn\u2019t click.' },
   { title: 'Pass to unlock, then get certified', desc: 'Clear each lesson\u2019s quiz to move forward, and earn a QR-verified certificate on completion.' },
 ];
-function resolveImageUrl(image?: string | null) {
-  if (!image) return null;
-  if (image.startsWith('http://') || image.startsWith('https://')) return image;
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL || (
-    process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : ''
-  );
-  const origin = base.replace(/\/api\/?$/, '');
-  return `${origin}${image.startsWith('/') ? '' : '/'}${image}`;
-}
 export default function HomePage() {
   const { t, lang } = useI18n();
   const { isAuthenticated } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [courses, setCourses] = useState<any[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [courseLoadFailed, setCourseLoadFailed] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [courseCount, setCourseCount] = useState<number | null>(null);
   const [heroSettings, setHeroSettings] = useState<any>(null);
   const [homeContent, setHomeContent] = useState<any>(null);
 
   const heroImageSource = getHeroImageSource(heroSettings);
-  const activeHeroUrl = heroImageSource && (typeof heroImageSource === 'string' && (heroImageSource.startsWith('http://') || heroImageSource.startsWith('https://')) ? heroImageSource : resolveImageUrl(heroImageSource as string));
+  const activeHeroUrl = resolveMediaUrl(heroImageSource) || '/images/home-hero.png';
 
   useEffect(() => {
+    let lastRefreshAt = Date.now();
     const loadSiteContent = () => {
+      setCoursesLoading(true);
       getCourses().then((res) => {
         const all = res.data.results ?? res.data;
         setCourses(all.slice(0, 6));
         setCourseCount(res.data.count ?? all.length);
-      }).catch((err) => { console.error('Failed to load courses:', err); });
+        setCourseLoadFailed(false);
+      }).catch((err) => {
+        console.error('Failed to load courses:', err);
+        setCourseLoadFailed(true);
+      }).finally(() => setCoursesLoading(false));
       getCategories().then((res) => setCategories(res.data.results ?? res.data)).catch((err) => { console.error('Failed to load categories:', err); });
       getSiteSettings().then((res) => setHeroSettings(res.data)).catch((err) => { console.error('Failed to load site settings:', err); });
       getPageContent('home').then((res) => setHomeContent(res.data)).catch(() => undefined);
     };
 
     loadSiteContent();
+    const refreshVisibleContent = () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastRefreshAt > 1000) {
+        lastRefreshAt = now;
+        loadSiteContent();
+      }
+    };
+    window.addEventListener('focus', refreshVisibleContent);
+    document.addEventListener('visibilitychange', refreshVisibleContent);
+    return () => {
+      window.removeEventListener('focus', refreshVisibleContent);
+      document.removeEventListener('visibilitychange', refreshVisibleContent);
+    };
   }, []);
 
   function handleSearch(e: React.FormEvent) {
@@ -99,43 +111,41 @@ export default function HomePage() {
     <div>
       <div className="woven-band" />
 
-      <section className="hero-section compact-home-hero" style={{ paddingTop: 12, paddingBottom: 14, minHeight: 0 }}>
-        <TechVisuals className="hero-tech-visuals" />
-        {activeHeroUrl ? (
-          <div className="hero-media" aria-hidden="true">
-            <Image src={activeHeroUrl} alt={heroSettings?.hero_title || 'Hero image'} fill priority sizes="100vw" className="hero-image" />
+      <section className="hero-section compact-home-hero home-hero">
+        <div className="container home-hero-inner">
+          <div className="home-hero-image">
+          <ApiImage
+            src={activeHeroUrl}
+            alt={heroSettings?.hero_title || 'Ethiopian student learning entrepreneurship online'}
+            fill
+            priority
+            sizes="(max-width: 640px) 100vw, (max-width: 1100px) 90vw, 960px"
+            className="hero-image"
+          />
           </div>
-        ) : null}
 
-        <div className="container hero-inner" style={{ maxWidth: 980, textAlign: 'center', paddingTop: 0, paddingBottom: 0 }}>
-          <div className="badge" style={{ marginBottom: 8 }}>
-            <Sparkles size={13} style={{ marginRight: 6 }} /> {heroSettings?.hero_title || t('heroTitle')}
-          </div>
-          <h1 className="hero-title" style={{ fontSize: 40, lineHeight: 1.06, margin: '0 0 10px', fontWeight: 700 }}>
-            {heroSettings?.hero_title || t('heroTitle')}
-          </h1>
-          <p className="hero-subtitle" style={{ fontSize: 16, marginBottom: 12, maxWidth: 680, marginLeft: 'auto', marginRight: 'auto' }}>
-            {heroSettings?.hero_subtitle || t('heroSubtitle')}
-          </p>
-
-          <form className="home-search-form" onSubmit={handleSearch} style={{ display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-              <Search size={16} style={{ position: 'absolute', left: 14, top: 13, color: 'var(--text-muted)' }} />
-              <input className="input" style={{ paddingLeft: 38 }} placeholder={t('searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <button className="btn btn-accent" type="submit" style={{ transform: 'translateZ(0)' }}>{t('exploreCourses')}</button>
-          </form>
-
-          {courseCount !== null && courseCount > 0 && (
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 16 }}>
-              {courseCount} course{courseCount !== 1 ? 's' : ''} live on the platform right now
+          <div className="home-hero-copy">
+            <h1 className="hero-title" style={{ fontSize: 36, lineHeight: 1.12, margin: '0 0 10px', fontWeight: 700 }}>
+              {heroSettings?.hero_title || t('heroTitle')}
+            </h1>
+            <p className="hero-subtitle" style={{ fontSize: 16, marginBottom: 16, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
+              {heroSettings?.hero_subtitle || t('heroSubtitle')}
             </p>
-          )}
-        </div>
-        <div className="hero-decor" aria-hidden>
-          <div className="floating-blob blob-1" />
-          <div className="floating-blob blob-2" />
-          <div className="floating-blob blob-3" />
+
+            <form className="home-search-form" onSubmit={handleSearch} style={{ display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+                <Search size={16} style={{ position: 'absolute', left: 14, top: 13, color: 'var(--text-muted)' }} />
+                <input className="input" style={{ paddingLeft: 38 }} placeholder={t('searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <button className="btn btn-accent" type="submit" style={{ transform: 'translateZ(0)' }}>{t('exploreCourses')}</button>
+            </form>
+
+            {courseCount !== null && courseCount > 0 && (
+              <p className="home-course-count" style={{ fontSize: 13, marginTop: 16 }}>
+                {courseCount} course{courseCount !== 1 ? 's' : ''} live on the platform right now
+              </p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -214,9 +224,16 @@ export default function HomePage() {
           {courses.map((course: any) => (
             <CourseCard key={course.id} course={course} />
           ))}
-          {courses.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Courses will appear here once published.</p>}
+          {coursesLoading && courses.length === 0 && <p role="status" style={{ color: 'var(--text-muted)' }}>Loading courses...</p>}
+          {!coursesLoading && courses.length === 0 && (
+            <p style={{ color: 'var(--text-muted)' }}>
+              {courseLoadFailed ? 'Courses are temporarily unavailable.' : 'No published courses are available right now.'}
+            </p>
+          )}
         </div>
       </section>
+
+      <HomeNewsSection />
 
     </div>
   );

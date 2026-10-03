@@ -1,4 +1,5 @@
 import axios, { AxiosHeaders } from 'axios';
+import type { AxiosResponse } from 'axios';
 import { supabase } from './supabase';
 import { getStoredDjangoAccessToken, isCompactJwtToken, isUsableJwtToken } from './auth-token';
 import { assertValidHttpHeaderValue, normalizePublicEnvironmentValue } from './http-headers';
@@ -186,6 +187,40 @@ export const updateMe = (payload: any) => apiClient.patch('/auth/me/', payload);
 // ---- Site settings ----
 export const getSiteSettings = () => apiClient.get('/site-settings/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
 export const getPageContent = (slug: string) => apiClient.get(`/page-content/${slug}/`, { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
+
+// ---- News ----
+export type NewsArticle = {
+  id: number;
+  title: string;
+  slug: string;
+  short_description: string;
+  content: string;
+  featured_image: string | null;
+  image_alt_text: string;
+  category: string;
+  author: string;
+  published_at: string | null;
+  is_published: boolean;
+  is_featured: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export const getNews = (): Promise<AxiosResponse<NewsArticle[]>> =>
+  apiClient.get('/news/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
+export const getFeaturedNews = (): Promise<AxiosResponse<NewsArticle[]>> =>
+  apiClient.get('/news/', {
+    timeout: PUBLIC_CONTENT_TIMEOUT,
+    params: { featured: 'true', _fresh: Date.now() },
+  });
+export const getNewsArticle = (slug: string) =>
+  apiClient.get(`/news/${encodeURIComponent(slug)}/`, { timeout: PUBLIC_CONTENT_TIMEOUT });
+export const createNewsArticle = (payload: FormData) =>
+  apiClient.post('/news/', payload, { timeout: AUTH_REQUEST_TIMEOUT });
+export const updateNewsArticle = (slug: string, payload: FormData) =>
+  apiClient.patch(`/news/${encodeURIComponent(slug)}/`, payload, { timeout: AUTH_REQUEST_TIMEOUT });
+export const deleteNewsArticle = (slug: string) =>
+  apiClient.delete(`/news/${encodeURIComponent(slug)}/`, { timeout: AUTH_REQUEST_TIMEOUT });
 
 // ---- Courses ----
 export const getCourses = (params?: Record<string, any>) => apiClient.get('/courses/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { ...params, _fresh: Date.now() } });

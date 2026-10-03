@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'quizzes',
     'site_settings',
     'ess_platform',
+    'news',
 ]
 
 # If the project defines a custom user model, set it here

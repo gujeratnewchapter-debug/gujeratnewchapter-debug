@@ -12,6 +12,8 @@ services:
     envVars:
       - key: DJANGO_DEBUG
         value: "False"
+      - key: RUN_MIGRATIONS
+        value: "true"
       - key: DJANGO_SECURE_PROXY_SSL_HEADER
         value: "true"
       - key: DJANGO_ALLOWED_HOSTS

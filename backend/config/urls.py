@@ -45,6 +45,7 @@ urlpatterns = [
     path('api/', include('quizzes.urls')),
     path('api/', include('certificates.urls')),
     path('api/ai/', include('ai_tutor.urls')),
+    path('api/', include('news.urls')),
     path('api/', include('site_settings.urls')),
     path('api/platform/', include('ess_platform.urls')),
 ]
@@ -52,10 +53,14 @@ urlpatterns = [
 # Local development serves filesystem media. Production returns Supabase
 # Storage URLs through the configured S3-compatible storage backend.
 if settings.MEDIA_URL.startswith('/') and not settings.SUPABASE_STORAGE_CONFIGURED:
-    urlpatterns += [
-        path(
-            settings.MEDIA_URL.lstrip('/'),
-            serve,
-            {'document_root': settings.MEDIA_ROOT},
-        ),
-    ]
+    media_path = settings.MEDIA_URL.lstrip('/')
+    if media_path and not media_path.endswith('/'):
+        media_path = f'{media_path}/'
+    if media_path:
+        urlpatterns += [
+            path(
+                f'{media_path}<path:path>',
+                serve,
+                {'document_root': settings.MEDIA_ROOT},
+            ),
+        ]
