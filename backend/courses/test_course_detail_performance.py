@@ -70,9 +70,10 @@ class EnrolledCourseDetailPerformanceTests(APITestCase):
         self.assertLessEqual(len(queries), 12)
 
     def test_enrolled_large_course_lesson_uses_bounded_queries(self):
-        with CaptureQueriesContext(connection) as queries:
-            response = self.client.get(reverse('lesson-detail', args=[self.lessons[0].id]))
+        for lesson in self.lessons:
+            with self.subTest(lesson=lesson.id), CaptureQueriesContext(connection) as queries:
+                response = self.client.get(reverse('lesson-detail', args=[lesson.id]))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['id'], self.lessons[0].id)
-        self.assertLessEqual(len(queries), 12)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data['id'], lesson.id)
+            self.assertLessEqual(len(queries), 12)

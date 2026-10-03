@@ -179,14 +179,9 @@ class IsLessonCourseInstructorOrReadOnly(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.user.is_authenticated and (request.user.is_super_admin or obj.section.course.instructor_id == request.user.id):
             return True
-        if request.method in permissions.SAFE_METHODS and obj.is_preview:
-            return True
-        if request.method not in permissions.SAFE_METHODS or not request.user.is_authenticated:
-            return False
-        from enrollments.models import Enrollment, is_lesson_unlocked
-        if not Enrollment.objects.filter(student=request.user, course=obj.section.course).exists():
-            return False
-        return is_lesson_unlocked(request.user, obj)
+        if request.method in permissions.SAFE_METHODS:
+            return obj.is_preview or obj.id in getattr(view, '_readable_lesson_ids', set())
+        return False
 
 
 class SectionViewSet(viewsets.ModelViewSet):
@@ -246,6 +241,7 @@ class LessonViewSet(viewsets.ModelViewSet):
                 for lesson_id, is_unlocked in unlocked.items()
                 if is_unlocked
             )
+        self._readable_lesson_ids = set(accessible_ids)
         return qs.filter(id__in=accessible_ids)
 
     def perform_create(self, serializer):
