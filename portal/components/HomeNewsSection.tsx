@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { A11y, Keyboard } from 'swiper/modules';
+import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react';
+import { A11y, Autoplay, Keyboard } from 'swiper/modules';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import type { Swiper as SwiperInstance } from 'swiper';
 import 'swiper/css';
@@ -14,6 +14,10 @@ import { NewsArticleCard } from '@/components/NewsArticleCard';
 type NavigationState = { previous: boolean; next: boolean };
 
 function getNavigationState(swiper: SwiperInstance): NavigationState {
+  const visibleSlides = Number(swiper.params.slidesPerView);
+  const canMove = swiper.slides.length > visibleSlides;
+  if (!canMove) return { previous: false, next: false };
+  if (swiper.params.loop || swiper.params.rewind) return { previous: true, next: true };
   return { previous: !swiper.isBeginning, next: !swiper.isEnd };
 }
 
@@ -23,6 +27,32 @@ export function HomeNewsSection() {
   const [error, setError] = useState(false);
   const [swiper, setSwiper] = useState<SwiperInstance | null>(null);
   const [navigation, setNavigation] = useState<NavigationState>({ previous: false, next: false });
+  const [reducedMotion, setReducedMotion] = useState(true);
+  const [motionPreferenceReady, setMotionPreferenceReady] = useState(false);
+  const [userPaused, setUserPaused] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+  const carouselRegion = useRef<HTMLDivElement>(null);
+  const pointerInside = useRef(false);
+  const mouseInside = useRef(false);
+  const focusInside = useRef(false);
+  const userPausedRef = useRef(false);
+  const announceNextChange = useRef(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateMotionPreference = () => {
+      setReducedMotion(mediaQuery.matches);
+      setMotionPreferenceReady(true);
+    };
+
+    updateMotionPreference();
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', updateMotionPreference);
+      return () => mediaQuery.removeEventListener('change', updateMotionPreference);
+    }
+    mediaQuery.addListener(updateMotionPreference);
+    return () => mediaQuery.removeListener(updateMotionPreference);
+  }, []);
 
   const loadArticles = useCallback(async () => {
     setLoading(true);
@@ -45,6 +75,52 @@ export function HomeNewsSection() {
   const syncNavigation = useCallback((instance: SwiperInstance) => {
     setNavigation(getNavigationState(instance));
   }, []);
+
+  const syncAutoplay = useCallback((instance = swiper) => {
+    if (!instance || instance.destroyed || !instance.autoplay) return;
+
+    const visibleSlides = Number(instance.params.slidesPerView);
+    const canRotate = motionPreferenceReady
+      && !reducedMotion
+      && articles.length > visibleSlides;
+
+    if (!canRotate || userPausedRef.current || pointerInside.current || mouseInside.current || focusInside.current) {
+      instance.autoplay.stop();
+      return;
+    }
+
+    if (!instance.autoplay.running) instance.autoplay.start();
+  }, [articles.length, motionPreferenceReady, reducedMotion, swiper]);
+
+  const syncLayout = useCallback((instance: SwiperInstance) => {
+    syncNavigation(instance);
+    syncAutoplay(instance);
+  }, [syncAutoplay, syncNavigation]);
+
+  useEffect(() => {
+    syncAutoplay();
+  }, [syncAutoplay]);
+
+  const handleSlideChange = useCallback((instance: SwiperInstance) => {
+    syncLayout(instance);
+    if (announceNextChange.current) {
+      setAnnouncement(`Showing news story ${Math.min(instance.realIndex + 1, articles.length)} of ${articles.length}`);
+      announceNextChange.current = false;
+    }
+  }, [articles.length, syncLayout]);
+
+  const handleFocusLeave = (event: FocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    focusInside.current = nextTarget instanceof Node && event.currentTarget.contains(nextTarget);
+    syncAutoplay();
+  };
+
+  const handlePauseToggle = () => {
+    const paused = !userPausedRef.current;
+    userPausedRef.current = paused;
+    setUserPaused(paused);
+    syncAutoplay();
+  };
 
   return (
     <section className="container section home-news-section" aria-labelledby="home-news-title">
@@ -70,52 +146,121 @@ export function HomeNewsSection() {
         <p className="news-state">There are no published stories yet. Please check back soon.</p>
       ) : (
         <>
-          <div className="news-carousel-controls" aria-label="News carousel controls">
-            <button
-              type="button"
-              aria-label="Show previous stories"
-              onClick={() => swiper?.slidePrev()}
-              disabled={!navigation.previous}
-            >
-              <ArrowLeft size={18} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              aria-label="Show more stories"
-              onClick={() => swiper?.slideNext()}
-              disabled={!navigation.next}
-            >
-              <ArrowRight size={18} aria-hidden="true" />
-            </button>
-          </div>
-          <Swiper
-            className="news-carousel"
-            modules={[A11y, Keyboard]}
-            keyboard={{ enabled: true, onlyInViewport: true }}
-            a11y={{ enabled: true, prevSlideMessage: 'Previous news stories', nextSlideMessage: 'Next news stories' }}
-            slidesPerView={1}
-            spaceBetween={16}
-            breakpoints={{
-              640: { slidesPerView: Math.min(2, articles.length), spaceBetween: 20 },
-              1024: { slidesPerView: Math.min(3, articles.length), spaceBetween: 24 },
+          <div
+            ref={carouselRegion}
+            className="home-news-carousel-region"
+            role="region"
+            aria-label="Latest news stories"
+            aria-roledescription="carousel"
+            onPointerEnter={() => {
+              pointerInside.current = true;
+              syncAutoplay();
             }}
-            onSwiper={(instance) => {
-              setSwiper(instance);
-              syncNavigation(instance);
+            onPointerLeave={() => {
+              pointerInside.current = false;
+              syncAutoplay();
             }}
-            onSlideChange={syncNavigation}
-            onBreakpoint={syncNavigation}
-            onResize={syncNavigation}
+            onMouseEnter={() => {
+              mouseInside.current = true;
+              syncAutoplay();
+            }}
+            onMouseLeave={() => {
+              mouseInside.current = false;
+              syncAutoplay();
+            }}
+            onFocusCapture={() => {
+              focusInside.current = true;
+              syncAutoplay();
+            }}
+            onBlurCapture={handleFocusLeave}
+            onKeyDownCapture={(event) => {
+              if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') announceNextChange.current = true;
+            }}
           >
-            {articles.map((article) => (
-              <SwiperSlide key={article.id}>
-                <NewsArticleCard article={article} />
-              </SwiperSlide>
-            ))}
-          </Swiper>
-          <p className="sr-only" aria-live="polite">
-            Showing news story {Math.min((swiper?.activeIndex ?? 0) + 1, articles.length)} of {articles.length}
-          </p>
+            {articles.length > 1 && (
+              <div className="news-carousel-controls" role="group" aria-label="News carousel controls">
+                <button
+                  type="button"
+                  aria-label="Show previous stories"
+                  onClick={() => {
+                    announceNextChange.current = true;
+                    swiper?.slidePrev();
+                  }}
+                  disabled={!navigation.previous}
+                >
+                  <ArrowLeft size={18} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Show next stories"
+                  onClick={() => {
+                    announceNextChange.current = true;
+                    swiper?.slideNext();
+                  }}
+                  disabled={!navigation.next}
+                >
+                  <ArrowRight size={18} aria-hidden="true" />
+                </button>
+                {motionPreferenceReady && !reducedMotion && (
+                  <button
+                    type="button"
+                    className="news-autoplay-toggle"
+                    aria-label={userPaused ? 'Resume automatic news rotation' : 'Pause automatic news rotation'}
+                    onClick={handlePauseToggle}
+                  >
+                    {userPaused
+                      ? <Play size={17} aria-hidden="true" />
+                      : <Pause size={17} aria-hidden="true" />}
+                    <span>{userPaused ? 'Resume' : 'Pause'}</span>
+                  </button>
+                )}
+              </div>
+            )}
+            <Swiper
+              className="news-carousel"
+              modules={[A11y, Autoplay, Keyboard]}
+              keyboard={{ enabled: true, onlyInViewport: true }}
+              a11y={{
+                enabled: true,
+                prevSlideMessage: 'Previous news stories',
+                nextSlideMessage: 'Next news stories',
+                wrapperLiveRegion: false,
+              }}
+              autoplay={{
+                enabled: false,
+                delay: 5200,
+                disableOnInteraction: false,
+                pauseOnMouseEnter: false,
+                waitForTransition: true,
+              }}
+              loop={articles.length >= 3}
+              rewind={articles.length === 2}
+              slidesPerView={1}
+              spaceBetween={16}
+              breakpoints={{
+                640: { slidesPerView: Math.min(2, articles.length), spaceBetween: 20 },
+                1024: { slidesPerView: Math.min(3, articles.length), spaceBetween: 24 },
+              }}
+              onSwiper={(instance) => {
+                setSwiper(instance);
+                syncNavigation(instance);
+                syncAutoplay(instance);
+                setAnnouncement(`Showing news story ${Math.min(instance.realIndex + 1, articles.length)} of ${articles.length}`);
+              }}
+              onSlideChange={handleSlideChange}
+              onBreakpoint={syncLayout}
+              onResize={syncLayout}
+            >
+              {articles.map((article) => (
+                <SwiperSlide key={article.id}>
+                  <NewsArticleCard article={article} />
+                </SwiperSlide>
+              ))}
+            </Swiper>
+            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+              {announcement}
+            </p>
+          </div>
         </>
       )}
     </section>
