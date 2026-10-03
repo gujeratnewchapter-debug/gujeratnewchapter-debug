@@ -62,7 +62,17 @@ class LessonSlimSerializer(serializers.ModelSerializer):
         model = Lesson
         fields = ['id', 'title', 'lesson_type', 'order', 'video_url', 'duration_minutes', 'is_preview', 'is_unlocked', 'resources']
 
+    def get_course_access(self, obj):
+        access_by_course = self.context.get('_course_lesson_access', {})
+        return access_by_course.get(obj.section.course_id)
+
     def get_is_unlocked(self, obj):
+        course_access = self.get_course_access(obj)
+        if course_access is not None:
+            if not course_access['authenticated']:
+                return obj.is_preview
+            return course_access['unlocked'].get(obj.id, False)
+
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return obj.is_preview
@@ -70,6 +80,20 @@ class LessonSlimSerializer(serializers.ModelSerializer):
         return is_lesson_unlocked(request.user, obj)
 
     def get_resources(self, obj):
+        course_access = self.get_course_access(obj)
+        if course_access is not None:
+            accessible = (
+                course_access['privileged']
+                or obj.is_preview
+                or (
+                    course_access['enrolled']
+                    and course_access['unlocked'].get(obj.id, False)
+                )
+            )
+            if not accessible:
+                return []
+            return ResourceSerializer(obj.resources.all(), many=True, context=self.context).data
+
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             if not obj.is_preview:
@@ -90,17 +114,29 @@ class LessonSlimSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get('request')
         user = request.user if request else None
-        privileged = bool(
-            user and user.is_authenticated and (
-                user.is_super_admin or instance.section.course.instructor_id == user.id
+        course_access = self.get_course_access(instance)
+        if course_access is not None:
+            privileged = course_access['privileged']
+            accessible = (
+                privileged
+                or instance.is_preview
+                or (
+                    course_access['enrolled']
+                    and course_access['unlocked'].get(instance.id, False)
+                )
             )
-        )
-        accessible = bool(instance.is_preview)
-        if user and user.is_authenticated and not privileged:
-            from enrollments.models import Enrollment, is_lesson_unlocked
-            accessible = Enrollment.objects.filter(
-                student=user, course=instance.section.course,
-            ).exists() and is_lesson_unlocked(user, instance)
+        else:
+            privileged = bool(
+                user and user.is_authenticated and (
+                    user.is_super_admin or instance.section.course.instructor_id == user.id
+                )
+            )
+            accessible = bool(instance.is_preview)
+            if user and user.is_authenticated and not privileged:
+                from enrollments.models import Enrollment, is_lesson_unlocked
+                accessible = Enrollment.objects.filter(
+                    student=user, course=instance.section.course,
+                ).exists() and is_lesson_unlocked(user, instance)
 
         if not privileged and not accessible:
             data.pop('id', None)
@@ -164,6 +200,33 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             'level', 'status', 'thumbnail', 'price', 'is_free', 'language', 'duration_hours',
             'sections', 'created_at',
         ]
+
+    def to_representation(self, instance):
+        request = self.context.get('request')
+        if request:
+            user = request.user
+            privileged = bool(
+                user.is_authenticated
+                and (user.is_super_admin or instance.instructor_id == user.id)
+            )
+            enrolled = False
+            unlocked = {}
+            if user.is_authenticated:
+                from enrollments.models import get_course_lesson_unlocks
+                unlocked = get_course_lesson_unlocks(user, instance)
+                if not privileged:
+                    from enrollments.models import Enrollment
+                    enrolled = Enrollment.objects.filter(
+                        student=user,
+                        course=instance,
+                    ).exists()
+            self.context.setdefault('_course_lesson_access', {})[instance.id] = {
+                'authenticated': user.is_authenticated,
+                'privileged': privileged,
+                'enrolled': enrolled,
+                'unlocked': unlocked,
+            }
+        return super().to_representation(instance)
 
     def get_thumbnail(self, obj):
         request = self.context.get('request')

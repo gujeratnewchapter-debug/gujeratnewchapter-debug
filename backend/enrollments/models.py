@@ -40,6 +40,50 @@ def is_lesson_unlocked(student, lesson):
     return True
 
 
+def get_course_lesson_unlocks(student, course):
+    lessons = list(
+        Lesson.objects.filter(section__course=course)
+        .select_related('section')
+        .prefetch_related('quiz', 'section__quizzes')
+        .order_by('section__order', 'order')
+    )
+    if not lessons:
+        return {}
+
+    gated_quizzes = {}
+    required_quiz_ids = set()
+    for index in range(1, len(lessons)):
+        lesson = lessons[index]
+        previous_lesson = lessons[index - 1]
+        quiz = getattr(previous_lesson, 'quiz', None)
+        if not quiz and previous_lesson.section_id != lesson.section_id:
+            quiz = next(
+                (
+                    section_quiz
+                    for section_quiz in previous_lesson.section.quizzes.all()
+                    if section_quiz.is_final_exam and section_quiz.lesson_id is None
+                ),
+                None,
+            )
+        if quiz:
+            gated_quizzes[lesson.id] = quiz.id
+            required_quiz_ids.add(quiz.id)
+
+    from quizzes.models import QuizAttempt
+
+    passed_quiz_ids = set(
+        QuizAttempt.objects.filter(
+            quiz_id__in=required_quiz_ids,
+            student=student,
+            passed=True,
+        ).values_list('quiz_id', flat=True)
+    )
+    return {
+        lesson.id: lesson.id not in gated_quizzes or gated_quizzes[lesson.id] in passed_quiz_ids
+        for lesson in lessons
+    }
+
+
 class Enrollment(models.Model):
     student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='enrollments')
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
