@@ -1,16 +1,31 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { setDjangoAuthToken, verifyEmail } from '@/lib/api';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
   const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     const run = async () => {
       try {
+        const token = new URLSearchParams(window.location.search).get('token');
+        if (token) {
+          const { data } = await verifyEmail(token);
+          if (!data?.access) throw new Error('Verification succeeded but no sign-in token was returned.');
+          setDjangoAuthToken(data.access);
+          setStatus('success');
+          window.setTimeout(() => window.location.assign('/dashboard'), 1200);
+          return;
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
         if (session?.user?.email_confirmed_at) {

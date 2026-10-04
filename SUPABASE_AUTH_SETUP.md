@@ -30,9 +30,13 @@ In the Supabase Dashboard:
 ### Password reset
 
 - Go to Authentication > Settings
-- Enable email recovery
-- Set redirect URL to: http://localhost:3000/reset-password
-- For production, use your deployed portal URL
+- Enable email recovery.
+- Set the Supabase **Site URL** to the canonical deployed portal URL (for this deployment, `https://ethiopian-startup-school-frontend.vercel.app`).
+- Add these production redirect URLs to the Supabase redirect allow-list:
+  - `https://ethiopian-startup-school-frontend.vercel.app/auth/callback`
+  - `https://ethiopian-startup-school-frontend.vercel.app/reset-password`
+- Add `http://localhost:3000/auth/callback` and `http://localhost:3000/reset-password` only for local development.
+- Keep confirmation email templates based on Supabase's `{{ .ConfirmationURL }}`. Do not hard-code a localhost URL in an email template.
 
 ### Google OAuth
 
@@ -55,6 +59,7 @@ Frontend:
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_APP_URL=https://your-production-domain.com
 ```
 
 Backend:
@@ -62,7 +67,7 @@ Backend:
 ```env
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_JWT_SECRET=
-SUPABASE_JWKS_URL=https://your-project-ref.supabase.co/auth/v1/jwks
+SUPABASE_JWKS_URL=https://your-project-ref.supabase.co/auth/v1/.well-known/jwks.json
 ```
 
 If you use a JWT secret instead of JWKS, set `SUPABASE_JWT_SECRET` and keep it server-only.
@@ -88,13 +93,14 @@ Ensure your environment contains the Supabase URL/JWKS values before starting Dj
 
 ## 7) Production deployment
 
-Use these production redirect URLs:
+Set `NEXT_PUBLIC_APP_URL` in the frontend hosting environment to the canonical portal URL, set the same URL as the Supabase **Site URL**, and add these production redirects to Supabase's allow-list:
 
 - https://your-domain.com/auth/callback
 - https://your-domain.com/reset-password
-- https://your-domain.com/verify-email
 
-Set the same values in Supabase Auth configuration and your frontend environment variables.
+Backend-issued legacy verification links use `/verify-email?token=...`; that page exchanges the token with the API. Supabase confirmation emails should instead use `/auth/callback`.
+
+For public launch, configure a production SMTP provider and appropriate sending/rate limits in Supabase Auth. The built-in email service is not intended for high-volume production registration.
 
 ## 8) Important security notes
 

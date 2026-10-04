@@ -50,7 +50,7 @@ export default function HomePage() {
   const [homeContent, setHomeContent] = useState<any>(null);
 
   const heroImageSource = getHeroImageSource(heroSettings);
-  const activeHeroUrl = resolveMediaUrl(heroImageSource) || '/images/home-hero.png';
+  const activeHeroUrl = resolveMediaUrl(heroImageSource) || '/images/home-hero-illustration.png';
 
   useEffect(() => {
     let lastRefreshAt = Date.now();
@@ -108,7 +108,7 @@ export default function HomePage() {
   const steps = (configuredSteps.length ? configuredSteps : STEPS).map((item: any, index: number) => Array.isArray(item) ? { title: item[0], desc: item[1] } : item || STEPS[index]);
 
   return (
-    <div>
+    <div className="homepage-shell">
       <div className="woven-band" />
 
       <section className="hero-section compact-home-hero home-hero">

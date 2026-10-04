@@ -27,6 +27,7 @@ export function HomeNewsSection() {
   const [error, setError] = useState(false);
   const [swiper, setSwiper] = useState<SwiperInstance | null>(null);
   const [navigation, setNavigation] = useState<NavigationState>({ previous: false, next: false });
+  const [activeIndex, setActiveIndex] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(true);
   const [motionPreferenceReady, setMotionPreferenceReady] = useState(false);
   const [userPaused, setUserPaused] = useState(false);
@@ -181,6 +182,7 @@ export function HomeNewsSection() {
               <div className="news-carousel-controls" role="group" aria-label="News carousel controls">
                 <button
                   type="button"
+                  className="news-carousel-arrow news-carousel-arrow-prev"
                   aria-label="Show previous stories"
                   onClick={() => {
                     announceNextChange.current = true;
@@ -192,6 +194,7 @@ export function HomeNewsSection() {
                 </button>
                 <button
                   type="button"
+                  className="news-carousel-arrow news-carousel-arrow-next"
                   aria-label="Show next stories"
                   onClick={() => {
                     announceNextChange.current = true;
@@ -201,19 +204,48 @@ export function HomeNewsSection() {
                 >
                   <ArrowRight size={18} aria-hidden="true" />
                 </button>
-                {motionPreferenceReady && !reducedMotion && (
-                  <button
-                    type="button"
-                    className="news-autoplay-toggle"
-                    aria-label={userPaused ? 'Resume automatic news rotation' : 'Pause automatic news rotation'}
-                    onClick={handlePauseToggle}
+                <div className="news-carousel-bottom">
+                  <div className="news-carousel-bottom-row">
+                    <div className="news-carousel-dots" role="group" aria-label="Choose a news story">
+                      {articles.map((article, index) => (
+                        <button
+                          key={article.id}
+                          type="button"
+                          aria-label={`Show story ${index + 1}: ${article.title}`}
+                          aria-current={index === activeIndex ? 'true' : undefined}
+                          onClick={() => {
+                            announceNextChange.current = true;
+                            if (articles.length >= 3) swiper?.slideToLoop(index);
+                            else swiper?.slideTo(index);
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {motionPreferenceReady && !reducedMotion && (
+                      <button
+                        type="button"
+                        className="news-autoplay-toggle"
+                        aria-label={userPaused ? 'Resume automatic news rotation' : 'Pause automatic news rotation'}
+                        onClick={handlePauseToggle}
+                      >
+                        {userPaused
+                          ? <Play size={17} aria-hidden="true" />
+                          : <Pause size={17} aria-hidden="true" />}
+                        <span>{userPaused ? 'Resume' : 'Pause'}</span>
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    className="news-carousel-progress"
+                    role="progressbar"
+                    aria-label="News story progress"
+                    aria-valuemin={0}
+                    aria-valuemax={articles.length}
+                    aria-valuenow={activeIndex + 1}
                   >
-                    {userPaused
-                      ? <Play size={17} aria-hidden="true" />
-                      : <Pause size={17} aria-hidden="true" />}
-                    <span>{userPaused ? 'Resume' : 'Pause'}</span>
-                  </button>
-                )}
+                    <span style={{ width: `${((activeIndex + 1) / articles.length) * 100}%` }} />
+                  </div>
+                </div>
               </div>
             )}
             <Swiper
@@ -228,7 +260,7 @@ export function HomeNewsSection() {
               }}
               autoplay={{
                 enabled: false,
-                delay: 5200,
+                delay: 5000,
                 disableOnInteraction: false,
                 pauseOnMouseEnter: false,
                 waitForTransition: true,
@@ -236,24 +268,24 @@ export function HomeNewsSection() {
               loop={articles.length >= 3}
               rewind={articles.length === 2}
               slidesPerView={1}
-              spaceBetween={16}
-              breakpoints={{
-                640: { slidesPerView: Math.min(2, articles.length), spaceBetween: 20 },
-                1024: { slidesPerView: Math.min(3, articles.length), spaceBetween: 24 },
-              }}
+              spaceBetween={0}
               onSwiper={(instance) => {
                 setSwiper(instance);
+                setActiveIndex(instance.realIndex);
                 syncNavigation(instance);
                 syncAutoplay(instance);
                 setAnnouncement(`Showing news story ${Math.min(instance.realIndex + 1, articles.length)} of ${articles.length}`);
               }}
-              onSlideChange={handleSlideChange}
+              onSlideChange={(instance) => {
+                setActiveIndex(instance.realIndex);
+                handleSlideChange(instance);
+              }}
               onBreakpoint={syncLayout}
               onResize={syncLayout}
             >
               {articles.map((article) => (
                 <SwiperSlide key={article.id}>
-                  <NewsArticleCard article={article} />
+                  <NewsArticleCard article={article} featured />
                 </SwiperSlide>
               ))}
             </Swiper>

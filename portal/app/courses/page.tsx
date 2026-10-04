@@ -22,7 +22,6 @@ function CoursesInner() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
     const params: Record<string, any> = {};
     if (search) params.search = search;
     if (category) params.category = category;
@@ -31,8 +30,39 @@ function CoursesInner() {
     const query = new URLSearchParams(params as any).toString();
     router.replace(query ? `/courses?${query}` : '/courses');
 
-    getCourses(params).then((res) => setCourses(res.data.results ?? res.data)).finally(() => setLoading(false));
-  }, [search, category, level]); // eslint-disable-line react-hooks/exhaustive-deps
+    let active = true;
+    let requestId = 0;
+    let lastRefreshAt = Date.now();
+    const fetchCourses = (showLoader: boolean) => {
+      const currentRequestId = ++requestId;
+      if (showLoader) setLoading(true);
+      return getCourses(params)
+        .then((res) => {
+          if (active && currentRequestId === requestId) setCourses(res.data.results ?? res.data);
+        })
+        .catch((err) => { console.error('Failed to load courses:', err); })
+        .finally(() => {
+          if (active && currentRequestId === requestId) setLoading(false);
+        });
+    };
+    const searchDelay = window.setTimeout(() => { void fetchCourses(true); }, search ? 220 : 0);
+    const refreshVisibleCourses = () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastRefreshAt > 1000) {
+        lastRefreshAt = now;
+        void fetchCourses(false);
+      }
+    };
+    window.addEventListener('focus', refreshVisibleCourses);
+    document.addEventListener('visibilitychange', refreshVisibleCourses);
+
+    return () => {
+      active = false;
+      window.clearTimeout(searchDelay);
+      window.removeEventListener('focus', refreshVisibleCourses);
+      document.removeEventListener('visibilitychange', refreshVisibleCourses);
+    };
+  }, [search, category, level, router]);
 
   return (
     <div className="container section">

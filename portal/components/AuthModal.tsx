@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { getMe } from '@/lib/api';
+import { getAuthRedirectUrl } from '@/lib/auth-redirect';
 
 export function AuthModal({
   onClose,
@@ -137,7 +138,14 @@ export function AuthModal({
         email: signUpForm.email.trim(),
         role,
       };
-      await signUp(payload);
+      const result = await signUp(payload);
+      if (result && !result.requiresConfirmation) {
+        await signIn(payload.email, payload.password);
+        setSignUpForm({ full_name: '', email: '', password: '', confirm_password: '' });
+        await routeAfterAuth();
+        return;
+      }
+
       setSuccess('Account created. Please check your email to verify your account before signing in.');
       setSignInForm({ email: '', password: '' });
       setSignUpForm({ full_name: '', email: '', password: '', confirm_password: '' });
@@ -184,7 +192,7 @@ export function AuthModal({
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getAuthRedirectUrl('/auth/callback'),
         },
       });
       if (error) throw error;
@@ -205,12 +213,38 @@ export function AuthModal({
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: getAuthRedirectUrl('/reset-password'),
       });
       if (error) throw error;
       setSuccess('A password reset email has been sent. Please check your inbox.');
     } catch (err: any) {
       setError(err?.message || 'Unable to send password reset email.');
+    } finally {
+      setLoading(false);
+    }
+
+  }
+
+  async function handleResendConfirmation() {
+    const email = signInForm.email.trim();
+    if (!email) {
+      setError('Enter your email address first.');
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: getAuthRedirectUrl('/auth/callback') },
+      });
+      if (error) throw error;
+      setSuccess('If an unverified account exists for that email, a new verification link has been sent.');
+    } catch (err: any) {
+      setError(err?.message || 'Unable to resend the verification email. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -275,6 +309,11 @@ export function AuthModal({
         </div>
 
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+        {tab === 'signin' && /email not confirmed|resend the verification email/i.test(error) && (
+          <button className="btn" type="button" onClick={handleResendConfirmation} disabled={loading} style={{ marginBottom: 10 }}>
+            {loading ? 'Sending...' : 'Resend verification email'}
+          </button>
+        )}
         {success && <p style={{ color: 'var(--brand)', fontSize: 13, marginBottom: 10 }}>{success}</p>}
 
         {tab === 'signin' ? (

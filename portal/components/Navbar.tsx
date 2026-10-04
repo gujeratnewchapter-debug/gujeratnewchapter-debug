@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Lightbulb, ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n, LANGUAGES } from '@/lib/i18n';
+import { normalizePublicEnvironmentValue } from '@/lib/http-headers';
 import { AuthModal } from './AuthModal';
 
 export function Navbar() {
@@ -24,8 +25,13 @@ export function Navbar() {
   function avatarSource(avatar?: string | null) {
     if (!avatar) return null;
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) return avatar;
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL || (
-      process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : ''
+    const base = normalizePublicEnvironmentValue(
+      process.env.NEXT_PUBLIC_API_BASE_URL,
+      'NEXT_PUBLIC_API_BASE_URL',
+    ) || (
+      process.env.NODE_ENV === 'development'
+        ? 'http://localhost:8000/api'
+        : 'https://ethiopian-startup-school-api.onrender.com/api'
     );
     return `${base.replace(/\/api\/?$/, '')}${avatar.startsWith('/') ? '' : '/'}${avatar}`;
   }

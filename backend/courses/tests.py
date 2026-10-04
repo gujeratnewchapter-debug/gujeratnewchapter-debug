@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -61,6 +63,59 @@ class LessonAndResourceAuthorizationTests(APITestCase):
 		self.assertNotIn('id', locked)
 		self.assertNotIn('video_url', locked)
 		self.assertFalse(locked['is_unlocked'])
+
+	def test_enrolled_student_can_open_first_lesson_from_course_detail(self):
+		from enrollments.models import Enrollment
+		Enrollment.objects.create(student=self.student, course=self.course)
+		self.client.force_authenticate(self.student)
+
+		response = self.client.get(reverse('course-detail', args=[self.course.id]))
+
+		self.assertEqual(response.status_code, 200)
+		first_lesson = response.json()['sections'][0]['lessons'][0]
+		self.assertEqual(first_lesson['id'], self.preview_lesson.id)
+		self.assertTrue(first_lesson['is_unlocked'])
+
+	def test_enrolled_student_can_access_each_lesson_without_quiz_gates(self):
+		from enrollments.models import Enrollment
+
+		course = Course.objects.create(
+			title='Accessible Course', slug='accessible-course', description='Course',
+			instructor=self.instructor,
+			status=Course.Status.PUBLISHED,
+		)
+		section = Section.objects.create(course=course, title='Module 1', order=1)
+		lessons = [
+			Lesson.objects.create(section=section, title=f'Lesson {index}', order=index)
+			for index in range(1, 4)
+		]
+		Enrollment.objects.create(student=self.student, course=course)
+		self.client.force_authenticate(self.student)
+
+		course_response = self.client.get(reverse('course-detail', args=[course.id]))
+
+		self.assertEqual(course_response.status_code, 200)
+		lesson_ids = [
+			lesson['id']
+			for section_data in course_response.json()['sections']
+			for lesson in section_data['lessons']
+		]
+		self.assertEqual(lesson_ids, [lesson.id for lesson in lessons])
+		for lesson in lessons:
+			response = self.client.get(reverse('lesson-detail', args=[lesson.id]))
+			self.assertEqual(response.status_code, 200)
+
+	def test_course_detail_prefetches_curriculum_queries(self):
+		for section_order in range(2, 8):
+			section = Section.objects.create(course=self.course, title=f'Module {section_order}', order=section_order)
+			for lesson_order in range(1, 4):
+				Lesson.objects.create(section=section, title=f'Lesson {section_order}-{lesson_order}', order=lesson_order)
+
+		with CaptureQueriesContext(connection) as queries:
+			response = self.client.get(reverse('course-detail', args=[self.course.id]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertLessEqual(len(queries), 8)
 
 	def test_course_write_serializer_removes_unsafe_html(self):
 		from .serializers import CourseWriteSerializer

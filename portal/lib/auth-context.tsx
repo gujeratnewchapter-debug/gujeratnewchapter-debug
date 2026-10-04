@@ -10,6 +10,7 @@ import {
   syncSupabaseSessionWithRefresh,
 } from './api';
 import { getStoredDjangoAccessToken, isUsableJwtToken } from './auth-token';
+import { getAuthRedirectUrl } from './auth-redirect';
 
 export type Role = 'student' | 'instructor' | 'super_admin';
 
@@ -197,6 +198,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         const msg = (error?.message || '').toLowerCase();
+        if (msg.includes('email not confirmed')) {
+          throw new Error('Email not confirmed. Resend the verification email to activate your account.');
+        }
         const isSupabaseUnavailable = msg.includes('supabase not configured') || msg.includes('not configured');
         const isCredentialFailure = isSupabaseUnavailable || msg.includes('invalid login') || msg.includes('invalid login credentials') || msg.includes('user not found') || msg.includes('email not confirmed');
 
@@ -253,6 +257,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSupabaseSessionAvailable(Boolean(session));
       setUser(normalizeSupabaseUser(session?.user ?? null));
     } catch (err: any) {
+      if (err?.message?.toLowerCase().includes('email not confirmed')) {
+        throw new Error('Email not confirmed. Resend the verification email to activate your account.');
+      }
       if (err?.response?.status === 400 || err?.status === 400) {
         throw new Error('Sign-in failed: invalid credentials or request. Check email/password and verify your email.');
       }
@@ -269,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: getAuthRedirectUrl('/auth/callback'),
       },
     });
     if (error) {
@@ -304,7 +311,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: payload.role || 'student',
             email_verified: false,
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: getAuthRedirectUrl('/auth/callback'),
         },
       });
 

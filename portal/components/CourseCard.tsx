@@ -1,28 +1,29 @@
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { BookOpen } from 'lucide-react';
+import { ApiImage } from '@/components/ApiImage';
+import { prefetchCourse } from '@/lib/api';
 
 export function CourseCard({ course }: { course: any }) {
   return (
-    <Link href={`/courses/${course.slug}?id=${course.id}`} className="card course-card">
+    <Link
+      href={`/courses/${course.slug}?id=${course.id}`}
+      className="card course-card"
+      onMouseEnter={() => prefetchCourse(course.id)}
+      onFocus={() => prefetchCourse(course.id)}
+    >
       <div className="course-card-media" aria-hidden="true">
-        {course.thumbnail ? (
-          <Image src={course.thumbnail} alt={course.title} fill priority style={{ objectFit: 'cover' }} unoptimized />
-        ) : (
-          <BookOpen size={28} color="var(--text-muted)" />
-        )}
+        <ApiImage src={course.thumbnail} alt={course.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 33vw" style={{ objectFit: 'cover' }} />
       </div>
       <div className="course-card-body">
         <p className="course-card-title">{course.title}</p>
         <div className="course-card-meta course-card-instructor">
           {course.instructor_photo ? (
-            <Image
+            <ApiImage
               src={course.instructor_photo}
               alt=""
               width={22}
               height={22}
-              unoptimized
+              fallbackSrc="/favicon.svg"
             />
           ) : (
             <span className="course-card-instructor-fallback" aria-hidden="true">

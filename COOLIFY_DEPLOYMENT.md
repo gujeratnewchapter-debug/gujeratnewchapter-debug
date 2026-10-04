@@ -1,85 +1,120 @@
 # Coolify Deployment Preparation
 
-This repository is prepared for three Coolify services from the same GitHub repository:
+## Production architecture
 
 ```text
-Next.js frontend -> app.yourdomain.com:3000
-Django backend   -> api.yourdomain.com:8000
-PostgreSQL       -> private Coolify network
+GitHub
+  ├── Vercel: Next.js frontend
+  └── Coolify: Django backend
+        └── Existing Supabase PostgreSQL, Storage, and Auth
 ```
 
-## Media storage decision
+Do not create a Coolify database or replace the existing Supabase project.
+The backend uses the existing Supabase PostgreSQL connection through
+`DATABASE_URL`, the existing Supabase Storage S3-compatible endpoint, and the
+existing Supabase Auth JWKS or JWT configuration.
 
-The application stores avatars, course thumbnails, lesson files, resources,
-certificates, hero images, and knowledge-base files with Django's filesystem
-storage. A Coolify persistent volume mounted at `/app/media` is the smallest
-change for the current architecture and keeps the requested deployment to
-three services. The backend serves `/media/` explicitly in both development and
-production; it does not depend on `DEBUG=True` media serving.
+## Coolify backend service
 
-For a multi-backend or multi-region deployment, migrate the default storage to
-S3-compatible object storage later. Object storage is more durable and scales
-better, but it adds credentials, a fourth external dependency, and a storage
-migration that is not required for the initial Coolify topology.
-
-## Coolify services
-
-### Frontend
-
-- Build context: `portal`
-- Dockerfile: `portal/Dockerfile`
-- Port: `3000`
-- Domain: `https://app.yourdomain.com`
-- Health check: `/`
-- Set `NEXT_PUBLIC_*` variables as build-time variables.
-
-### Backend
+Use the repository root as the GitHub source and configure the service as:
 
 - Build context: `backend`
 - Dockerfile: `backend/Dockerfile`
-- Port: `8000`
-- Domain: `https://api.yourdomain.com`
-- Health check: `/health/`
-- Persistent volume: `/app/media`
-- The container runs migrations and `collectstatic` before Gunicorn starts.
+- Application port: `8000`
+- Start command: `./docker-entrypoint.sh`
+- Health check: `GET https://<backend-domain>/health/`
+- Public domain: the HTTPS domain generated or assigned by Coolify
 
-### PostgreSQL
+The container installs dependencies, collects static files, and starts Gunicorn
+on `0.0.0.0:${PORT:-8000}`. It does not reset, drop, flush, or recreate
+production data. Migrations are opt-in: set `RUN_MIGRATIONS=True` only after
+inspecting migration state and confirming the change is required.
 
-- Create a Coolify-managed PostgreSQL resource.
-- Keep it on the private network.
-- Set `DATABASE_URL` on the backend using the internal database hostname.
-- Configure automated backups before importing production data.
+A persistent `/app/media` volume is not required when the existing Supabase
+Storage variables are configured. Keep the volume only for a deliberately
+local/filesystem storage setup.
 
-## Local Compose test
+## Backend environment variables
 
-```powershell
-Copy-Item .env.compose.example .env.compose
-# Edit .env.compose and replace every placeholder secret.
-docker compose --env-file .env.compose up --build
+Set these as Coolify service environment variables. Values must remain secret
+except for public Supabase anon/JWKS-related values that are intentionally
+needed by the backend:
+
+```text
+DJANGO_SECRET_KEY
+DJANGO_DEBUG=False
+DJANGO_ALLOWED_HOSTS
+DJANGO_CORS_ALLOWED_ORIGINS
+DJANGO_CSRF_TRUSTED_ORIGINS
+DJANGO_SECURE_SSL_REDIRECT=True
+DJANGO_SECURE_HSTS_SECONDS
+DJANGO_SECURE_PROXY_SSL_HEADER=True
+DJANGO_DB_CONN_MAX_AGE
+RUN_MIGRATIONS=False
+DATABASE_URL
+FRONTEND_BASE_URL
+
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_JWT_SECRET or SUPABASE_JWKS_URL
+
+SUPABASE_S3_ENDPOINT
+SUPABASE_S3_ACCESS_KEY_ID
+SUPABASE_S3_SECRET_ACCESS_KEY
+SUPABASE_S3_REGION
+SUPABASE_STORAGE_BUCKET
+SUPABASE_STORAGE_PUBLIC_URL
+
+EMAIL_BACKEND
+EMAIL_HOST
+EMAIL_PORT
+EMAIL_USE_TLS
+EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD
+DEFAULT_FROM_EMAIL
+EMAIL_TIMEOUT
 ```
 
-Check `http://localhost:8000/health/`, `http://localhost:8000/admin/`, and
-`http://localhost:3000`. Stop the stack with:
+`DJANGO_ALLOWED_HOSTS` must contain the backend host without a scheme.
+`DJANGO_CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` must contain
+the exact Vercel frontend origin, without a path. `FRONTEND_BASE_URL` must be
+the exact public Vercel URL and is used for email and certificate links.
 
-```powershell
-docker compose --env-file .env.compose down
+## Frontend environment variables
+
+In the existing Vercel frontend project, set:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=https://<backend-domain>/api
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ```
 
-## Required environment variables
+`NEXT_PUBLIC_API_BASE_URL` is the only frontend variable that changes for the
+Coolify migration. Do not put backend secrets in Vercel environment variables.
 
-Backend variables are documented in `backend/.env.production.example`.
-Frontend variables are documented in `portal/.env.production.example`.
-Never commit `.env`, `.env.production`, `.env.compose`, database passwords,
-OAuth secrets, Supabase private keys, or AI provider keys.
+## Coolify UI sequence
 
-## Database and media migration
+1. Create or open the Coolify project.
+2. Add an application from the GitHub repository.
+3. Select the repository and `main` branch.
+4. Use Docker deployment with build context `backend` and Dockerfile
+   `backend/Dockerfile`.
+5. Set port `8000` and health path `/health/`.
+6. Add the backend environment variables above through the Coolify secret
+   interface.
+7. Add the public backend domain and enable HTTPS.
+8. Deploy and wait for the container and health check to become healthy.
+9. Keep `RUN_MIGRATIONS=False` for the initial deployment. After the service is
+   healthy, inspect `python manage.py showmigrations` and
+   `python manage.py makemigrations --check`, then run only required migrations
+   through a one-off Coolify command or temporary `RUN_MIGRATIONS=True`
+   deployment.
+10. In Vercel, update `NEXT_PUBLIC_API_BASE_URL` to the Coolify backend URL and
+    redeploy the existing frontend.
+11. Test public endpoints, Supabase JWT authentication, storage URLs, CORS,
+    CSRF, and the complete learning flow.
 
-1. Back up the current PostgreSQL database.
-2. Back up the current `backend/media/` contents separately.
-3. Create the Coolify PostgreSQL resource and restore the database backup.
-4. Attach the backend persistent volume and restore media into `/app/media`.
-5. Run the backend health, admin, upload, authentication, course, quiz, and certificate smoke tests.
-6. Switch DNS only after both services pass their health checks.
-
-Do not use the local SQLite database as the production migration source unless
-that data is intentionally the production dataset.
+Do not create a Coolify PostgreSQL resource, do not import or migrate the
+existing Supabase database, and do not run destructive database commands.
