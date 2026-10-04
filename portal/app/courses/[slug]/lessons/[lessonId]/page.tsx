@@ -123,11 +123,25 @@ export default function LessonPage() {
       const sectionData = sectionRes.data;
       const courseId = sectionData.course;
 
-      try {
-        const courseRes = await getCourse(courseId);
-        setCourse(courseRes.data);
-        try {
-          const quizzesRes = await getQuizzesForCourse(courseId);
+      if (isBackendAuthenticated) {
+        void getMyCertificates()
+          .then((certificatesRes) => {
+            const certificates = certificatesRes.data.results ?? certificatesRes.data;
+            setCourseCertificate(certificates.find((item: any) => item.course === courseId) ?? null);
+          })
+          .catch((certificateErr) => {
+            console.warn('Failed to load course certificate:', certificateErr);
+          });
+      }
+
+      const courseRequest = getCourse(courseId)
+        .then((courseRes) => setCourse(courseRes.data))
+        .catch((err) => {
+          console.warn('Failed to load course for lesson sidebar:', err);
+          setRequirementsError('Course quiz requirements could not be loaded. Retry before continuing.');
+        });
+      const moduleQuizzesRequest = getQuizzesForCourse(courseId)
+        .then((quizzesRes) => {
           const quizzes = quizzesRes.data.results ?? quizzesRes.data;
           setModuleFinalQuizzes(
             quizzes.reduce((acc: Record<string, any>, quiz: any) => {
@@ -137,28 +151,31 @@ export default function LessonPage() {
               return acc;
             }, {}),
           );
-        } catch (quizErr) {
+        })
+        .catch((quizErr) => {
           console.warn('Failed to load module final quizzes:', quizErr);
           setRequirementsError('Course quiz requirements could not be loaded. Retry before continuing.');
           setModuleFinalQuizzes({});
-        }
-      } catch (err) {
-        console.warn('Failed to load course for lesson sidebar:', err);
-      }
-
-      try {
-        if (isBackendAuthenticated) {
-          try {
-            const certificatesRes = await getMyCertificates();
-            const certificates = certificatesRes.data.results ?? certificatesRes.data;
-            setCourseCertificate(certificates.find((item: any) => item.course === courseId) ?? null);
-          } catch (certificateErr) {
-            console.warn('Failed to load course certificate:', certificateErr);
-          }
-          const my = await getMyEnrollments();
-          const list = my.data.results ?? my.data;
-          const match = list.find((e: any) => e.course === courseId);
-          if (match) {
+        });
+      const lessonQuizRequest = getQuizzesForLesson(Number(lessonId))
+        .then((res) => {
+          const qdata = res.data.results ?? res.data;
+          setQuizId(qdata[0]?.id ?? null);
+        })
+        .catch((err) => {
+          console.error('Failed to load quizzes for lesson', lessonId, err);
+          setRequirementsError('This lesson’s quiz requirement could not be checked. Retry before continuing.');
+        });
+      const enrollmentRequest = isBackendAuthenticated
+        ? getMyEnrollments()
+          .then(async (my) => {
+            const list = my.data.results ?? my.data;
+            const match = list.find((item: any) => item.course === courseId);
+            if (!match) {
+              setEnrollment(null);
+              setEnrollmentError('Your course enrollment could not be confirmed. Retry before continuing.');
+              return;
+            }
             setEnrollment(match);
             try {
               const progressRes = await getEnrollmentProgress(match.id);
@@ -167,22 +184,15 @@ export default function LessonPage() {
               console.warn('Failed to fetch lesson progress:', progressErr);
               setEnrollmentError('Your saved progress could not be checked. Retry before continuing.');
             }
-          } else {
-            setEnrollment(null);
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to load enrollment for lesson page:', err);
-        setEnrollmentError('Your enrollment could not be confirmed. Retry before continuing.');
-      }
+          })
+          .catch((err) => {
+            console.warn('Failed to load enrollment for lesson page:', err);
+            setEnrollmentError('Your enrollment could not be confirmed. Retry before continuing.');
+          })
+        : Promise.resolve();
 
       try {
-        const res = await getQuizzesForLesson(Number(lessonId));
-        const qdata = res.data.results ?? res.data;
-        setQuizId(qdata[0]?.id ?? null);
-      } catch (err) {
-        console.error('Failed to load quizzes for lesson', lessonId, err);
-        setRequirementsError('This lesson’s quiz requirement could not be checked. Retry before continuing.');
+        await Promise.all([courseRequest, moduleQuizzesRequest, lessonQuizRequest, enrollmentRequest]);
       } finally {
         setCheckingRequirements(false);
       }
