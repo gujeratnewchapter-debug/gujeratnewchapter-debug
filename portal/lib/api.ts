@@ -362,7 +362,11 @@ export const createChoice = (payload: any) => apiClient.post('/choices/', payloa
 export const updateChoice = (id: number, payload: any) => apiClient.patch(`/choices/${id}/`, payload);
 export const deleteChoice = (id: number) => apiClient.delete(`/choices/${id}/`);
 export const submitQuiz = (quizId: number, answers: any[], durationSeconds = 0) =>
-  apiClient.post(`/quizzes/${quizId}/submit/`, { answers, duration_seconds: durationSeconds });
+  apiClient.post(
+    `/quizzes/${quizId}/submit/`,
+    { answers, duration_seconds: durationSeconds },
+    { timeout: AUTH_REQUEST_TIMEOUT },
+  );
 
 // ---- Certificates ----
 export const getMyCertificates = () => apiClient.get('/certificates/', { timeout: AUTH_REQUEST_TIMEOUT });
