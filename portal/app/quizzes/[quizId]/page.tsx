@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getCourse, getQuiz, submitQuiz } from '@/lib/api';
 import { InnovationLoader } from '@/components/InnovationLoader';
+import { getNextLessonPath, getSectionContinuePath } from '@/lib/course-navigation';
 
 export default function QuizPage() {
   const { quizId } = useParams<{ quizId: string }>();
@@ -13,6 +14,7 @@ export default function QuizPage() {
   const [responses, setResponses] = useState<Record<number, { choiceIds: number[]; text: string }>>({});
   const [result, setResult] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const [error, setError] = useState('');
   const [startedAt] = useState(() => Date.now());
 
@@ -49,28 +51,56 @@ export default function QuizPage() {
     setResponses((prev) => ({ ...prev, [qid]: { choiceIds: prev[qid]?.choiceIds ?? [], text } }));
   }
 
-  function handleSuccessfulResult() {
+  async function handleSuccessfulResult() {
     if (!quiz) return;
+    setContinuing(true);
+    setError('');
 
-    if (quiz.is_final_exam) {
-      const slug = course?.slug;
-      if (slug) router.push(`/courses/${slug}`);
-      else router.push('/profile');
-      return;
-    }
-
-    if (quiz.lesson && course?.sections) {
-      const allLessons = course.sections.flatMap((section: any) => section.lessons ?? []);
-      const currentIndex = allLessons.findIndex((lesson: any) => lesson.id === quiz.lesson);
-      const nextLesson = allLessons[currentIndex + 1] ?? null;
-      if (nextLesson?.id) {
-        router.push(`/courses/${course.slug}/lessons/${nextLesson.id}`);
+    try {
+      if (quiz.is_final_exam && !quiz.section) {
+        router.push('/profile#certificates');
         return;
       }
+
+      let currentCourse = course;
+      if ((quiz.lesson || quiz.section) && quiz.course) {
+        const { data } = await getCourse(quiz.course, true);
+        currentCourse = data;
+        setCourse(data);
+      }
+
+      if (quiz.lesson && currentCourse?.sections && currentCourse.slug) {
+        const nextLessonPath = getNextLessonPath(
+          currentCourse.sections,
+          currentCourse.slug,
+          Number(quiz.lesson),
+        );
+        router.push(nextLessonPath ?? '/profile#certificates');
+        return;
+      }
+
+      if (quiz.section && currentCourse?.sections && currentCourse.slug) {
+        router.push(getSectionContinuePath(
+          currentCourse.sections,
+          currentCourse.slug,
+          Number(quiz.section),
+        ));
+        return;
+      }
+
+      if (quiz.is_final_exam) {
+        router.push('/profile#certificates');
+        return;
+      }
+
+      setError('You passed. We could not load the next lesson. Please try Continue again.');
+    } catch (err) {
+      console.error('Failed to load the next lesson after passing the quiz:', err);
+      setError('You passed, but the next lesson could not be loaded. Please try Continue again.');
+    } finally {
+      setContinuing(false);
     }
 
-    if (course?.slug) router.push(`/courses/${course.slug}`);
-    else router.push('/dashboard');
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -103,12 +133,19 @@ export default function QuizPage() {
         <p style={{ fontSize: 18, margin: '10px 0 24px' }}>
           {result.passed
             ? quiz.is_final_exam
-              ? '🎉 You passed the final exam and your certificate is ready in your profile.'
+              ? quiz.section
+                ? '🎉 You passed the module exam. Continue to the next lesson.'
+                : '🎉 You passed the final exam and your certificate is ready in your profile.'
               : '🎉 You passed! The next lesson is now unlocked.'
             : `You need ${quiz.passing_score_percent}% to pass — try again.`}
         </p>
         {result.passed ? (
-          <button className="btn btn-primary" onClick={handleSuccessfulResult}>Continue</button>
+          <>
+            {error && <p role="alert" style={{ color: 'var(--danger)', marginBottom: 16 }}>{error}</p>}
+            <button className="btn btn-primary" onClick={handleSuccessfulResult} disabled={continuing}>
+              {continuing ? 'Loading next lesson...' : 'Continue'}
+            </button>
+          </>
         ) : (
           <button className="btn btn-primary" onClick={() => { setResult(null); setResponses({}); }}>Retry Quiz</button>
         )}

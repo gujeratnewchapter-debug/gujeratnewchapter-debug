@@ -1,4 +1,5 @@
 from django.test import TestCase
+from unittest.mock import patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.models import User
@@ -49,3 +50,20 @@ class EnrollmentIntegrityTests(TestCase):
 		response = EnrollmentViewSet.as_view({'post': 'mark_lesson_complete'})(request, pk=self.enrollment.id)
 
 		self.assertEqual(response.status_code, 404)
+
+	@patch('certificates.views.ensure_certificate')
+	def test_completing_final_lesson_issues_course_certificate(self, ensure_certificate):
+		request = APIRequestFactory().post(
+			f'/api/enrollments/{self.enrollment.id}/mark_lesson_complete/',
+			{'lesson_id': self.lesson.id},
+			format='json',
+		)
+		force_authenticate(request, user=self.student)
+
+		response = EnrollmentViewSet.as_view({'post': 'mark_lesson_complete'})(request, pk=self.enrollment.id)
+
+		self.assertEqual(response.status_code, 200)
+		self.enrollment.refresh_from_db()
+		self.assertEqual(self.enrollment.progress_percent, 100)
+		self.assertIsNotNone(self.enrollment.completed_at)
+		ensure_certificate.assert_called_once_with(self.student, self.course)

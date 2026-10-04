@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
+from unittest.mock import patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from courses.management.commands.seed_startup_proclamation import build_answer_choices
@@ -277,3 +278,28 @@ class ProgressionAndCertificateTests(TestCase):
         response = QuizViewSet.as_view({'post': 'submit'})(request, pk=course_exam.id)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(self.enrollment.course.certificates.filter(student=self.student).exists())
+
+    @patch('quizzes.views.ensure_certificate')
+    def test_passing_final_lesson_quiz_issues_certificate(self, ensure_certificate):
+        quiz = Quiz.objects.create(
+            course=self.course,
+            section=self.module,
+            lesson=self.lesson_2,
+            title='Final Lesson Quiz',
+        )
+        question, choices = self._make_question_choice(quiz, correct='A')
+        self.enrollment.lesson_progress.create(lesson=self.lesson_1, is_completed=True)
+        request = APIRequestFactory().post(
+            f'/api/quizzes/{quiz.id}/submit/',
+            {'answers': [{'question_id': question.id, 'selected_choice_ids': [choices['A'].id]}]},
+            format='json',
+        )
+        force_authenticate(request, user=self.student)
+
+        response = QuizViewSet.as_view({'post': 'submit'})(request, pk=quiz.id)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.enrollment.refresh_from_db()
+        self.assertEqual(self.enrollment.progress_percent, 100)
+        self.assertIsNotNone(self.enrollment.completed_at)
+        ensure_certificate.assert_called_once_with(self.student, self.course)

@@ -3,30 +3,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, Lock, PlayCircle, FileText, Presentation, Headphones, Code, Radio, BookOpen } from 'lucide-react';
-import { getCourses, getMyEnrollments, enroll, getCourse, getQuizzesForCourse } from '@/lib/api';
+import { getCourses, getMyEnrollments, enroll, getCourse, getEnrollmentProgress, getQuizzesForCourse } from '@/lib/api';
 import { ApiImage } from '@/components/ApiImage';
 import { useAuth } from '@/lib/auth-context';
 import { InnovationLoader } from '@/components/InnovationLoader';
+import { getResumeLessonPath, getSectionContinuePath } from '@/lib/course-navigation';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 
 const ICONS: Record<string, any> = {
   video: PlayCircle, pdf: FileText, powerpoint: Presentation, text: BookOpen,
   interactive_html: Code, coding_exercise: Code, audio: Headphones, live_session: Radio,
 };
-
-function getLessonRedirectUrl(targetCourse: any, fallbackSlug: string): string | null {
-  const allLessons = targetCourse?.sections?.flatMap((section: any) => section.lessons ?? []) ?? [];
-  const nextLesson = allLessons.find(
-    (lesson: any) => lesson?.id != null && (lesson.is_unlocked !== false || lesson.is_preview),
-  );
-  const targetSlug = targetCourse?.slug || fallbackSlug;
-
-  if (nextLesson?.id) {
-    return `/courses/${targetSlug}/lessons/${nextLesson.id}`;
-  }
-
-  return null;
-}
 
 export default function CourseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -127,25 +114,33 @@ export default function CourseDetailPage() {
       });
   }, [course?.id, isBackendAuthenticated]);
 
-  const continueLearning = React.useCallback(async (targetCourse: any) => {
+  const continueLearning = React.useCallback(async (targetCourse: any, targetEnrollment: any = enrollment) => {
     setEnrollmentError(null);
     setOpeningLesson(true);
     try {
       const { data: accessibleCourse } = await getCourse(targetCourse.id, true);
       setCourse(accessibleCourse);
-      const lessonUrl = getLessonRedirectUrl(accessibleCourse, slug);
+      if (!targetEnrollment?.id) {
+        throw new Error('Your course enrollment could not be loaded. Refresh the page and try again.');
+      }
+      const { data: progress } = await getEnrollmentProgress(targetEnrollment.id);
+      const lessonUrl = getResumeLessonPath(
+        accessibleCourse.sections,
+        accessibleCourse.slug || slug,
+        progress.completed_lesson_ids ?? [],
+      );
       if (!lessonUrl) {
-        setEnrollmentError('No accessible lessons were returned for this course. Please try again.');
+        router.push('/profile#certificates');
         return;
       }
       router.push(lessonUrl);
     } catch (err) {
       console.error('Failed to load enrolled course lessons:', err);
-      setEnrollmentError('You’re enrolled, but course lessons could not be loaded. Please try again.');
+      setEnrollmentError(err instanceof Error ? err.message : 'You’re enrolled, but your next lesson could not be loaded. Please try again.');
     } finally {
       setOpeningLesson(false);
     }
-  }, [router, slug]);
+  }, [enrollment, router, slug]);
 
   const enrollInCourse = React.useCallback(async (targetCourse: any) => {
     setEnrollmentError(null);
@@ -156,13 +151,13 @@ export default function CourseDetailPage() {
         .find((item: any) => item.course === targetCourse.id);
       if (existingEnrollment) {
         setEnrollment(existingEnrollment);
-        await continueLearning(targetCourse);
+        await continueLearning(targetCourse, existingEnrollment);
         return;
       }
 
       const { data } = await enroll(targetCourse.id);
       setEnrollment(data);
-      await continueLearning(targetCourse);
+      await continueLearning(targetCourse, data);
     } catch (err: any) {
       console.error('Failed to enroll in course:', err);
       setEnrollmentError(
@@ -391,7 +386,11 @@ export default function CourseDetailPage() {
                   Ask the AI Tutor about this course
                 </button>
                 {finalExam && enrollment.progress_percent >= 100 && (
-                  <button className="btn btn-accent course-action-button" style={{ width: '100%', marginTop: 10 }} onClick={() => router.push(`/quizzes/${finalExam.id}`)}>
+                  <button
+                    className="btn btn-accent course-action-button"
+                    style={{ width: '100%', marginTop: 10 }}
+                    onClick={() => router.push(`/quizzes/${finalExam.id}`)}
+                  >
                     Take final exam
                   </button>
                 )}

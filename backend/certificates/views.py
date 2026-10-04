@@ -113,7 +113,7 @@ def generate_certificate_pdf(certificate):
     c.drawCentredString(width / 2, height - 137, 'CERTIFICATE OF COMPLETION')
     c.setFillColor(teal)
     c.setFont('Helvetica-Bold', 8)
-    c.drawCentredString(width / 2, height - 153, 'STARTUP FUNDAMENTALS PROGRAM')
+    c.drawCentredString(width / 2, height - 153, 'DIGITAL COURSE ACHIEVEMENT')
     c.setFillColor(muted)
     c.setFont('Helvetica', 12)
     c.drawCentredString(width / 2, height - 185, 'This certificate is proudly presented to')
@@ -187,7 +187,7 @@ def ensure_certificate(student, course, time_taken_seconds=0):
     certificate, created = Certificate.objects.get_or_create(student=student, course=course)
     certificate.time_taken_seconds = time_taken_seconds or certificate.time_taken_seconds or 0
     certificate.verification_url = f"{settings.FRONTEND_BASE_URL}/verify-certificate/{certificate.certificate_number}"
-    if created or not certificate.pdf_file or not certificate.verification_url or get_watermark_path():
+    if created or not certificate.pdf_file or not certificate.verification_url or get_watermark_bytes():
         pdf_buffer = generate_certificate_pdf(certificate)
         certificate.pdf_file.save(
             f"certificate_{certificate.certificate_number}.pdf",

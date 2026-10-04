@@ -7,6 +7,7 @@ import { getCourses, getCourse, getLesson, getMyEnrollments, getMyCertificates, 
 import { useAuth } from '@/lib/auth-context';
 import { InnovationLoader } from '@/components/InnovationLoader';
 import { sanitizeRichText } from '@/lib/sanitize-html';
+import { getNextLessonPath, getResumeLessonPath, getSectionContinuePath } from '@/lib/course-navigation';
 
 export default function LessonPage() {
   const { slug, lessonId } = useParams<{ slug: string; lessonId: string }>();
@@ -19,6 +20,7 @@ export default function LessonPage() {
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [syllabusOpen, setSyllabusOpen] = useState(true);
   const [completedLessonIds, setCompletedLessonIds] = useState<number[]>([]);
   const [openWeeks, setOpenWeeks] = useState<Record<string, boolean>>({});
@@ -91,13 +93,13 @@ export default function LessonPage() {
   const lessonProgress = allLessons.length ? Math.round((lessonNumber / allLessons.length) * 100) : 0;
 
   const load = useCallback(async () => {
+    setLoadError(false);
     try {
       const courseSearch = await getCourses({ search: slug });
       const courseMatches = courseSearch.data.results ?? courseSearch.data;
       const currentCourse = courseMatches.find((item: any) => item.slug === slug) ?? courseMatches[0];
       if (!currentCourse) {
         setLoadError(true);
-        router.replace('/courses');
         return;
       }
       const currentCourseDetail = (await getCourse(currentCourse.id, true)).data;
@@ -105,7 +107,6 @@ export default function LessonPage() {
         .find((item: any) => item.id === Number(lessonId));
       if (!currentLesson) {
         setLoadError(true);
-        router.replace(`/courses/${slug}`);
         return;
       }
       const { data } = await getLesson(Number(lessonId));
@@ -173,9 +174,8 @@ export default function LessonPage() {
     } catch (err) {
       console.warn('Lesson link is stale or unavailable:', lessonId, err);
       setLoadError(true);
-      router.replace(`/courses/${slug}`);
     }
-  }, [isBackendAuthenticated, lessonId, router, slug]);
+  }, [isBackendAuthenticated, lessonId, slug]);
 
   useEffect(() => {
     if (!isAuthLoading) void load();
@@ -195,12 +195,47 @@ export default function LessonPage() {
       if (nextLesson?.id) {
         router.push(`/courses/${slug}/lessons/${nextLesson.id}`);
       } else {
-        router.push(`/courses/${slug}`);
+        router.push('/profile#certificates');
       }
     } catch (error: any) {
       setCompletionError(error?.response?.data?.detail || 'This lesson is still locked. Complete the previous lesson and required quiz first.');
     } finally {
       setCompleting(false);
+    }
+  }
+
+  async function handleResumeSavedLesson() {
+    setResuming(true);
+    setCompletionError(null);
+    try {
+      let courseId = course?.id;
+      if (!courseId) {
+        const { data } = await getCourses({ search: slug });
+        const courses = data.results ?? data;
+        courseId = courses.find((item: any) => item.slug === slug)?.id ?? courses[0]?.id;
+      }
+      if (!courseId) throw new Error('The enrolled course could not be found.');
+
+      const { data: courseDetail } = await getCourse(courseId, true);
+      const enrollmentsResponse = await getMyEnrollments();
+      const enrollments = enrollmentsResponse.data.results ?? enrollmentsResponse.data;
+      const courseEnrollment = enrollments.find((item: any) => item.course === courseDetail.id);
+      if (!courseEnrollment) {
+        throw new Error('Your enrollment could not be found. Please sign in again and retry.');
+      }
+
+      const { data: progress } = await getEnrollmentProgress(courseEnrollment.id);
+      const lessonPath = getResumeLessonPath(
+        courseDetail.sections,
+        courseDetail.slug || slug,
+        progress.completed_lesson_ids ?? [],
+      );
+      router.push(lessonPath ?? '/profile#certificates');
+    } catch (error) {
+      console.error('Failed to resume the saved lesson:', error);
+      setCompletionError(error instanceof Error ? error.message : 'Your saved lesson could not be loaded. Please try again.');
+    } finally {
+      setResuming(false);
     }
   }
 
@@ -330,13 +365,27 @@ export default function LessonPage() {
     );
   }
 
-  if (loadError) return <div className="container section">Redirecting to the course...</div>;
+  if (loadError) {
+    return (
+      <div className="container section" style={{ maxWidth: 640 }}>
+        <div className="card" role="alert" style={{ padding: 24 }}>
+          <h1 style={{ fontSize: 22 }}>We couldn&apos;t open this lesson</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Your course progress is saved. Retry this lesson or continue from your last unfinished lesson.</p>
+          {completionError && <p style={{ color: 'var(--danger)' }}>{completionError}</p>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            <button className="btn" onClick={() => void load()} disabled={resuming}>Retry lesson</button>
+            <button className="btn btn-primary" onClick={handleResumeSavedLesson} disabled={resuming}>
+              {resuming ? 'Loading saved lesson...' : 'Continue from saved progress'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!lesson) return <div className="container section"><InnovationLoader label="Loading lesson" /></div>;
 
   return (
     <div className="container section lesson-page" style={{ maxWidth: 1100 }}>
-      <button className="btn" onClick={() => router.push(`/courses/${slug}`)} style={{ marginBottom: 16 }}>← Back to course</button>
-
       <div className="lesson-layout" style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
         <aside className="card lesson-syllabus-sidebar" style={{ padding: 16, position: 'sticky', top: 90, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}>
           <button

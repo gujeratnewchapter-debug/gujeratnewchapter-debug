@@ -1,12 +1,9 @@
-from django.conf import settings
 from django.utils import timezone
-from django.core.files.base import ContentFile
 from rest_framework import viewsets, permissions
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from certificates.models import Certificate
-from certificates.views import generate_certificate_pdf
+from certificates.views import ensure_certificate
 from .models import Quiz, Question, Choice, QuizAttempt, Answer
 from courses.models import Course
 from .serializers import (
@@ -201,7 +198,11 @@ class QuizViewSet(viewsets.ModelViewSet):
                 enrollment=enrollment, is_completed=True,
             ).count()
             enrollment.progress_percent = int((completed_lessons / len(total_lessons)) * 100) if total_lessons else 0
-            enrollment.save(update_fields=['progress_percent'])
+            if enrollment.progress_percent >= 100:
+                enrollment.completed_at = enrollment.completed_at or timezone.now()
+            enrollment.save(update_fields=['progress_percent', 'completed_at'])
+            if enrollment.progress_percent >= 100:
+                ensure_certificate(request.user, quiz.course)
 
         is_course_completion_exam = False
         if attempt.passed and quiz.is_final_exam and quiz.course_id:
@@ -214,21 +215,13 @@ class QuizViewSet(viewsets.ModelViewSet):
         if is_course_completion_exam:
             from enrollments.models import Enrollment
             enrollment, _ = Enrollment.objects.get_or_create(student=request.user, course=quiz.course)
-            enrollment.progress_percent = 100
-            enrollment.completed_at = timezone.now()
-            enrollment.save()
-
-            certificate, _ = Certificate.objects.get_or_create(student=request.user, course=quiz.course)
-            certificate.time_taken_seconds = attempt.duration_seconds
-            certificate.verification_url = f"{settings.FRONTEND_BASE_URL}/verify-certificate/{certificate.certificate_number}"
-            if not certificate.pdf_file:
-                pdf_buffer = generate_certificate_pdf(certificate)
-                certificate.pdf_file.save(
-                    f"certificate_{certificate.certificate_number}.pdf",
-                    ContentFile(pdf_buffer.read()),
-                    save=True,
-                )
-            certificate.save()
+            total_lessons = quiz.course.ordered_lessons()
+            completed_lessons = enrollment.lesson_progress.filter(is_completed=True).count()
+            if total_lessons and completed_lessons >= len(total_lessons):
+                enrollment.progress_percent = 100
+                enrollment.completed_at = enrollment.completed_at or timezone.now()
+                enrollment.save(update_fields=['progress_percent', 'completed_at'])
+                ensure_certificate(request.user, quiz.course, attempt.duration_seconds)
 
         return Response(QuizAttemptResultSerializer(attempt).data)
 

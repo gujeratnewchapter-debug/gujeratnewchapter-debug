@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BrainCircuit, CheckCircle2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { deleteCourse, getCourses, getInstructorAnalytics, getMyEnrollments } from '@/lib/api';
+import { deleteCourse, getCourse, getCourses, getEnrollmentProgress, getInstructorAnalytics, getMyEnrollments } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { InnovationLoader } from '@/components/InnovationLoader';
+import { getResumeLessonPath } from '@/lib/course-navigation';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
@@ -16,10 +17,12 @@ export default function DashboardPage() {
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [myCourses, setMyCourses] = useState<any[]>([]);
   const [instructorAnalytics, setInstructorAnalytics] = useState<any>(null);
+  const [resumingEnrollmentId, setResumingEnrollmentId] = useState<number | null>(null);
+  const [resumeError, setResumeError] = useState('');
 
   useEffect(() => {
     if (!isLoading && !isBackendAuthenticated) router.push('/');
-  }, [isLoading, isBackendAuthenticated]);
+  }, [isLoading, isBackendAuthenticated, router]);
 
   useEffect(() => {
     if (!isBackendAuthenticated) return;
@@ -49,6 +52,27 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Failed to delete course:', err);
       window.alert('Unable to delete this course. Please try again.');
+    }
+
+  }
+
+  async function handleResumeCourse(enrollment: any) {
+    setResumeError('');
+    setResumingEnrollmentId(enrollment.id);
+    try {
+      const { data: course } = await getCourse(enrollment.course, true);
+      const { data: progress } = await getEnrollmentProgress(enrollment.id);
+      const lessonPath = getResumeLessonPath(
+        course.sections,
+        course.slug,
+        progress.completed_lesson_ids ?? [],
+      );
+      router.push(lessonPath ?? '/profile#certificates');
+    } catch (error) {
+      console.error('Failed to resume the enrolled course:', error);
+      setResumeError('We could not load your saved lesson. Please try again.');
+    } finally {
+      setResumingEnrollmentId(null);
     }
   }
 
@@ -106,14 +130,23 @@ export default function DashboardPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           <button className="btn btn-primary" onClick={() => router.push('/ai-tutor')}>Ask the AI Tutor</button>
-          <button className="btn" onClick={() => router.push('/courses')}>Continue learning</button>
+          <button
+            className="btn"
+            onClick={() => {
+              const activeEnrollment = enrollments.find((item) => (item.progress_percent ?? 0) < 100);
+              if (activeEnrollment) void handleResumeCourse(activeEnrollment);
+              else router.push('/courses');
+            }}
+          >
+            Continue learning
+          </button>
           <button className="btn" onClick={() => router.push('/profile')}>View profile</button>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 18, marginBottom: 40 }}>
         {enrollments.map((e: any) => (
-          <Link key={e.id} href={`/courses/${e.course_detail?.slug}`} className="card" style={{ display: 'block' }}>
+          <div key={e.id} className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <p style={{ fontWeight: 600, margin: 0 }}>{e.course_detail?.title}</p>
               <CheckCircle2 size={15} color="var(--brand)" />
@@ -122,8 +155,16 @@ export default function DashboardPage() {
               <div style={{ width: `${e.progress_percent}%`, height: '100%', background: 'var(--brand)' }} />
             </div>
             <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.progress_percent}% complete</p>
-          </Link>
+            <button
+              className="btn btn-primary"
+              onClick={() => void handleResumeCourse(e)}
+              disabled={resumingEnrollmentId === e.id}
+            >
+              {resumingEnrollmentId === e.id ? 'Opening saved lesson...' : (e.progress_percent ?? 0) >= 100 ? 'View certificate' : 'Continue course'}
+            </button>
+          </div>
         ))}
+        {resumeError && <p role="alert" style={{ color: 'var(--danger)' }}>{resumeError}</p>}
         {enrollments.length === 0 && (
           <div className="card">
             <p style={{ color: 'var(--text-muted)' }}>You haven&apos;t enrolled in a course yet.</p>

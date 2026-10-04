@@ -51,6 +51,9 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         if enrollment.progress_percent >= 100 and not enrollment.completed_at:
             enrollment.completed_at = timezone.now()
         enrollment.save()
+        if enrollment.progress_percent >= 100:
+            from certificates.views import ensure_certificate
+            ensure_certificate(request.user, enrollment.course)
         return Response(EnrollmentSerializer(enrollment).data)
 
     @action(detail=True, methods=['get'])
