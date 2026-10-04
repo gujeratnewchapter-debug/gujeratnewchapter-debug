@@ -1,7 +1,12 @@
 import axios, { AxiosHeaders } from 'axios';
 import type { AxiosResponse } from 'axios';
 import { supabase } from './supabase';
-import { getStoredDjangoAccessToken, isCompactJwtToken, isUsableJwtToken } from './auth-token';
+import {
+  getStoredDjangoAccessToken,
+  isCompactJwtToken,
+  isExpiredDjangoAccessToken,
+  isUsableJwtToken,
+} from './auth-token';
 import { assertValidHttpHeaderValue, normalizePublicEnvironmentValue } from './http-headers';
 
 const DEFAULT_API_BASE_URL =
@@ -19,7 +24,8 @@ const courseDetailRequests = new Map<string, { expiresAt: number; promise: Promi
 const sessionExchangeRequests = new Map<string, Promise<any>>();
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
-let sessionSyncPromise: Promise<any> | null = null;
+export const DJANGO_AUTH_TOKEN_UPDATED_EVENT = 'django-auth-token-updated';
+let sessionSyncPromise: Promise<AxiosResponse<any> | null> | null = null;
 
 function createBearerAuthorization(token: string) {
   if (!isCompactJwtToken(token)) {
@@ -47,10 +53,28 @@ function clearCourseDetailRequests() {
 }
 
 apiClient.interceptors.request.use(async (config) => {
-  const djangoToken = getStoredDjangoAccessToken();
   const headers = config.headers ?? {};
+  let djangoToken = getStoredDjangoAccessToken();
+  const hasExplicitAuthorization = Boolean((headers as Record<string, string>).Authorization);
+  const requestPath = config.url?.split('?')[0].replace(/\/+$/, '');
 
-  if (!(headers as Record<string, string>).Authorization) {
+  if (
+    !hasExplicitAuthorization
+    && !requestPath?.endsWith('/auth/session/sync')
+    && djangoToken
+    && isExpiredDjangoAccessToken(djangoToken)
+  ) {
+    const sessionResponse = await syncSupabaseSessionFromBrowser();
+    if (sessionResponse?.data?.access) {
+      djangoToken = sessionResponse.data.access;
+      setDjangoAuthToken(djangoToken);
+    } else {
+      clearDjangoAuthToken();
+      djangoToken = null;
+    }
+  }
+
+  if (!hasExplicitAuthorization) {
     if (djangoToken && isUsableJwtToken(djangoToken)) {
       (headers as Record<string, string>).Authorization = createBearerAuthorization(djangoToken);
     } else {
@@ -104,14 +128,17 @@ apiClient.interceptors.response.use(
     if (status === 401 && original && !original._authRetry && !isSessionSyncRequest) {
       original._authRetry = true;
       try {
-        const { data: sessionData } = await syncSupabaseSessionFromBrowser();
-        setDjangoAuthToken(sessionData.access);
-        original.headers = original.headers ?? {};
-        original.headers.Authorization = createBearerAuthorization(sessionData.access);
-        return apiClient(original);
-      } catch {
-        clearDjangoAuthToken();
+        const sessionResponse = await syncSupabaseSessionFromBrowser();
+        if (sessionResponse?.data?.access) {
+          setDjangoAuthToken(sessionResponse.data.access);
+          original.headers = original.headers ?? {};
+          original.headers.Authorization = createBearerAuthorization(sessionResponse.data.access);
+          return apiClient(original);
+        }
+      } catch (syncError) {
+        console.error('Failed to refresh the learning platform session after an unauthorized API response:', syncError);
       }
+      clearDjangoAuthToken();
     }
 
     return Promise.reject(error);
@@ -122,10 +149,9 @@ async function syncSupabaseSessionFromBrowser() {
   if (!sessionSyncPromise) {
     sessionSyncPromise = (async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
-      if (error || !session?.access_token) {
-        throw error || new Error('No active Supabase session');
-      }
-      return syncSupabaseSession(session.access_token);
+      if (error) throw error;
+      if (!session?.access_token) return null;
+      return syncSupabaseSessionWithRefresh(session.access_token);
     })();
   }
 
@@ -188,6 +214,9 @@ export function setDjangoAuthToken(accessToken: string | null) {
   if (accessToken) {
     try {
       localStorage.setItem('django_access', accessToken);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(DJANGO_AUTH_TOKEN_UPDATED_EVENT));
+      }
     } catch (e) {
       /* ignore */
     }
@@ -199,6 +228,9 @@ export function setDjangoAuthToken(accessToken: string | null) {
 export function clearDjangoAuthToken() {
   clearCourseDetailRequests();
   try { localStorage.removeItem('django_access'); localStorage.removeItem('django_refresh'); } catch (e) { /* ignore */ }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(DJANGO_AUTH_TOKEN_UPDATED_EVENT));
+  }
 }
 
 export const verifyEmail = (token: string) => apiClient.post('/auth/verify-email/', { token });

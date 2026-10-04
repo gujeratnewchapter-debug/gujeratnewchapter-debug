@@ -45,6 +45,22 @@ export function isUsableJwtToken(token?: string | null): boolean {
   return true;
 }
 
+export function isExpiredDjangoAccessToken(token?: string | null): boolean {
+  if (!isCompactJwtToken(token)) return false;
+
+  const payload = decodeJwtPayload(token);
+  if (!payload || payload.token_type !== 'access') return false;
+
+  const userId = payload.user_id;
+  if (userId === undefined || userId === null || Number.isNaN(Number(userId))) return false;
+
+  const issuer = typeof payload.iss === 'string' ? payload.iss : '';
+  if (issuer.includes('supabase')) return false;
+
+  const exp = Number(payload.exp);
+  return Number.isFinite(exp) && exp > 0 && Date.now() >= exp * 1000;
+}
+
 export function getStoredDjangoAccessToken(): string | null {
   try {
     return localStorage.getItem('django_access') || null;

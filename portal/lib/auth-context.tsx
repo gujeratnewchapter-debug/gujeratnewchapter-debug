@@ -3,7 +3,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as api from './api';
 import { supabase } from './supabase';
-import { setDjangoAuthToken, clearDjangoAuthToken, syncSupabaseSessionWithRefresh } from './api';
+import {
+  DJANGO_AUTH_TOKEN_UPDATED_EVENT,
+  setDjangoAuthToken,
+  clearDjangoAuthToken,
+  syncSupabaseSessionWithRefresh,
+} from './api';
 import { getStoredDjangoAccessToken, isUsableJwtToken } from './auth-token';
 
 export type Role = 'student' | 'instructor' | 'super_admin';
@@ -73,6 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setHasHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    const handleAuthTokenUpdate = () => setTokenRefresh((previous) => previous + 1);
+    window.addEventListener(DJANGO_AUTH_TOKEN_UPDATED_EVENT, handleAuthTokenUpdate);
+    return () => window.removeEventListener(DJANGO_AUTH_TOKEN_UPDATED_EVENT, handleAuthTokenUpdate);
   }, []);
 
   // Recalculate hasValidDjangoSession whenever tokenRefresh changes (triggered by setDjangoAuthToken)

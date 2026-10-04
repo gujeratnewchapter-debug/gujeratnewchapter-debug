@@ -113,6 +113,26 @@ export default function LessonPage() {
       const currentLesson = currentCourseDetail.sections?.flatMap((section: any) => section.lessons ?? [])
         .find((item: any) => item.id === Number(lessonId));
       if (!currentLesson) {
+        if (isBackendAuthenticated) {
+          const enrollmentsRes = await getMyEnrollments();
+          const enrollments = enrollmentsRes.data.results ?? enrollmentsRes.data;
+          const courseEnrollment = enrollments.find(
+            (item: any) => Number(item.course) === Number(currentCourse.id),
+          );
+          if (courseEnrollment) {
+            const { data: progress } = await getEnrollmentProgress(courseEnrollment.id);
+            const resumePath = getResumeLessonPath(
+              currentCourseDetail.sections,
+              currentCourseDetail.slug || slug,
+              progress.completed_lesson_ids ?? [],
+            );
+            const currentPath = `/courses/${encodeURIComponent(slug)}/lessons/${lessonId}`;
+            if (resumePath && resumePath !== currentPath) {
+              router.replace(resumePath);
+              return;
+            }
+          }
+        }
         setLoadError(true);
         return;
       }
@@ -200,7 +220,7 @@ export default function LessonPage() {
       console.warn('Lesson link is stale or unavailable:', lessonId, err);
       setLoadError(true);
     }
-  }, [isBackendAuthenticated, lessonId, slug]);
+  }, [isBackendAuthenticated, lessonId, router, slug]);
 
   useEffect(() => {
     if (!isAuthLoading) void load();
