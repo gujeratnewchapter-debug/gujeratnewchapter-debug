@@ -79,18 +79,21 @@ apiClient.interceptors.response.use(
     const requestPath = original?.url?.split('?')[0].replace(/\/+$/, '');
     const isSessionSyncRequest = requestPath?.endsWith('/auth/session/sync');
     const retryConfig = original as (typeof original & { _transientRetryCount?: number }) | undefined;
+    const isTransientQuizNotFound = status === 404 && /^\/quizzes\/\d+$/.test(requestPath ?? '');
     const isTransientFailure =
       !error.response
       || status === 502
       || status === 503
-      || status === 504;
+      || status === 504
+      || isTransientQuizNotFound;
+    const retryLimit = isTransientQuizNotFound ? 1 : 2;
 
     if (
       retryConfig
       && retryConfig.method?.toLowerCase() === 'get'
       && !isSessionSyncRequest
       && isTransientFailure
-      && (retryConfig._transientRetryCount ?? 0) < 2
+      && (retryConfig._transientRetryCount ?? 0) < retryLimit
     ) {
       const retryCount = retryConfig._transientRetryCount ?? 0;
       retryConfig._transientRetryCount = retryCount + 1;
@@ -315,7 +318,7 @@ export const markLessonComplete = (enrollmentId: number, lessonId: number) =>
 
 // ---- Quizzes ----
 export const createQuiz = (payload: any) => apiClient.post('/quizzes/', payload);
-export const getQuiz = (id: number) => apiClient.get(`/quizzes/${id}/`);
+export const getQuiz = (id: number) => apiClient.get(`/quizzes/${id}/`, { timeout: AUTH_REQUEST_TIMEOUT });
 export const getQuizzesForLesson = (lessonId: number) => apiClient.get('/quizzes/', { timeout: AUTH_REQUEST_TIMEOUT, params: { lesson: lessonId } });
 export const getQuizzesForCourse = (courseId: number) => apiClient.get('/quizzes/', { timeout: AUTH_REQUEST_TIMEOUT, params: { course: courseId } });
 export const updateQuiz = (id: number, payload: any) => apiClient.patch(`/quizzes/${id}/`, payload);

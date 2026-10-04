@@ -11,6 +11,8 @@ export default function QuizPage() {
   const router = useRouter();
   const [quiz, setQuiz] = useState<any>(null);
   const [course, setCourse] = useState<any>(null);
+  const [loadingQuiz, setLoadingQuiz] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [responses, setResponses] = useState<Record<number, { choiceIds: number[]; text: string }>>({});
   const [result, setResult] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -18,8 +20,10 @@ export default function QuizPage() {
   const [error, setError] = useState('');
   const [startedAt] = useState(() => Date.now());
 
-  useEffect(() => {
-    async function load() {
+  const loadQuiz = React.useCallback(async () => {
+    setLoadingQuiz(true);
+    setLoadError('');
+    try {
       const res = await getQuiz(Number(quizId));
       const quizData = res.data;
       setQuiz(quizData);
@@ -30,12 +34,21 @@ export default function QuizPage() {
           setCourse(courseRes.data);
         } catch (err) {
           console.warn('Failed to load course for quiz navigation:', err);
+          setCourse(null);
         }
       }
+    } catch (err) {
+      console.error('Failed to load quiz:', quizId, err);
+      setQuiz(null);
+      setLoadError('This quiz could not be loaded. Retry; your course progress is saved.');
+    } finally {
+      setLoadingQuiz(false);
     }
-
-    void load();
   }, [quizId]);
+
+  useEffect(() => {
+    void loadQuiz();
+  }, [loadQuiz]);
 
   function toggle(qid: number, cid: number, multi: boolean) {
     setResponses((prev) => {
@@ -122,7 +135,21 @@ export default function QuizPage() {
     }
   }
 
-  if (!quiz) return <div className="container section"><InnovationLoader label="Loading quiz" /></div>;
+  if (loadingQuiz) return <div className="container section"><InnovationLoader label="Loading quiz" /></div>;
+
+  if (loadError || !quiz) {
+    return (
+      <div className="container section" style={{ maxWidth: 560, textAlign: 'center' }}>
+        <div className="card" role="alert" style={{ padding: 24 }}>
+          <h1 style={{ fontSize: 22, marginTop: 0 }}>Quiz temporarily unavailable</h1>
+          <p style={{ color: 'var(--text-muted)' }}>{loadError || 'This quiz is unavailable right now.'}</p>
+          <button className="btn btn-primary" onClick={() => void loadQuiz()} disabled={loadingQuiz}>
+            {loadingQuiz ? 'Retrying quiz...' : 'Retry quiz'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (result) {
     return (
