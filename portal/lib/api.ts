@@ -78,6 +78,25 @@ apiClient.interceptors.response.use(
     const status = error.response?.status;
     const requestPath = original?.url?.split('?')[0].replace(/\/+$/, '');
     const isSessionSyncRequest = requestPath?.endsWith('/auth/session/sync');
+    const retryConfig = original as (typeof original & { _transientRetryCount?: number }) | undefined;
+    const isTransientFailure =
+      !error.response
+      || status === 502
+      || status === 503
+      || status === 504;
+
+    if (
+      retryConfig
+      && retryConfig.method?.toLowerCase() === 'get'
+      && !isSessionSyncRequest
+      && isTransientFailure
+      && (retryConfig._transientRetryCount ?? 0) < 2
+    ) {
+      const retryCount = retryConfig._transientRetryCount ?? 0;
+      retryConfig._transientRetryCount = retryCount + 1;
+      await new Promise((resolve) => setTimeout(resolve, retryCount === 0 ? 1000 : 3000));
+      return apiClient(retryConfig);
+    }
 
     if (status === 401 && original && !original._authRetry && !isSessionSyncRequest) {
       original._authRetry = true;

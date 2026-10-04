@@ -17,6 +17,9 @@ export default function LessonPage() {
   const [course, setCourse] = useState<any>(null);
   const [enrollment, setEnrollment] = useState<any>(null);
   const [quizId, setQuizId] = useState<number | null>(null);
+  const [checkingRequirements, setCheckingRequirements] = useState(true);
+  const [requirementsError, setRequirementsError] = useState<string | null>(null);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -94,6 +97,10 @@ export default function LessonPage() {
 
   const load = useCallback(async () => {
     setLoadError(false);
+    setQuizId(null);
+    setCheckingRequirements(true);
+    setRequirementsError(null);
+    setEnrollmentError(null);
     try {
       const courseSearch = await getCourses({ search: slug });
       const courseMatches = courseSearch.data.results ?? courseSearch.data;
@@ -132,6 +139,7 @@ export default function LessonPage() {
           );
         } catch (quizErr) {
           console.warn('Failed to load module final quizzes:', quizErr);
+          setRequirementsError('Course quiz requirements could not be loaded. Retry before continuing.');
           setModuleFinalQuizzes({});
         }
       } catch (err) {
@@ -150,26 +158,33 @@ export default function LessonPage() {
           const my = await getMyEnrollments();
           const list = my.data.results ?? my.data;
           const match = list.find((e: any) => e.course === courseId);
-            if (match) {
-              setEnrollment(match);
-              try {
-                const progressRes = await getEnrollmentProgress(match.id);
-                setCompletedLessonIds(progressRes.data.completed_lesson_ids ?? []);
-              } catch (progressErr) {
-                console.warn('Failed to fetch lesson progress:', progressErr);
-              }
+          if (match) {
+            setEnrollment(match);
+            try {
+              const progressRes = await getEnrollmentProgress(match.id);
+              setCompletedLessonIds(progressRes.data.completed_lesson_ids ?? []);
+            } catch (progressErr) {
+              console.warn('Failed to fetch lesson progress:', progressErr);
+              setEnrollmentError('Your saved progress could not be checked. Retry before continuing.');
             }
+          } else {
+            setEnrollment(null);
+          }
         }
       } catch (err) {
         console.warn('Failed to load enrollment for lesson page:', err);
+        setEnrollmentError('Your enrollment could not be confirmed. Retry before continuing.');
       }
 
       try {
         const res = await getQuizzesForLesson(Number(lessonId));
         const qdata = res.data.results ?? res.data;
-        if (qdata.length) setQuizId(qdata[0].id);
+        setQuizId(qdata[0]?.id ?? null);
       } catch (err) {
         console.error('Failed to load quizzes for lesson', lessonId, err);
+        setRequirementsError('This lesson’s quiz requirement could not be checked. Retry before continuing.');
+      } finally {
+        setCheckingRequirements(false);
       }
     } catch (err) {
       console.warn('Lesson link is stale or unavailable:', lessonId, err);
@@ -513,7 +528,20 @@ export default function LessonPage() {
             <p role="alert" style={{ color: 'var(--danger, #dc2626)', margin: '0 0 12px', fontSize: 13 }}>{completionError}</p>
           )}
 
-          {quizId ? (
+          {(requirementsError || enrollmentError) ? (
+            <div>
+              <p role="alert" style={{ color: 'var(--danger, #dc2626)', margin: '0 0 12px', fontSize: 13 }}>
+                {requirementsError || enrollmentError}
+              </p>
+              <button className="btn btn-primary" onClick={() => void load()} disabled={checkingRequirements}>
+                {checkingRequirements ? 'Retrying lesson checks...' : 'Retry lesson checks'}
+              </button>
+            </div>
+          ) : checkingRequirements ? (
+            <button className="btn btn-primary" disabled>
+              Checking lesson requirements...
+            </button>
+          ) : quizId ? (
             <button className="btn btn-primary" onClick={() => router.push(`/quizzes/${quizId}`)}>
               Take the lesson quiz to continue
             </button>
