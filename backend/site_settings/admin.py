@@ -50,7 +50,11 @@ class PageContentAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Page identity', {'fields': ('slug', 'title', 'description', 'is_published')}),
         ('Translations and page data', {
-            'description': 'Use the content JSON for translated copy. Page sections below control editable page blocks.',
+            'description': (
+                'Use the content JSON for translated copy. Page sections below control editable page blocks. '
+                'For the Home page New notices callout, add "notices_callout": {"label": "New", '
+                '"visible": true, "pulse": true} inside each language content object.'
+            ),
             'fields': ('content',),
         }),
     )

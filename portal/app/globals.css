@@ -3627,6 +3627,11 @@ button, a, input, textarea, select { touch-action: manipulation; }
   content: '';
 }
 
+.home-notices-indicator--static::after {
+  animation: none;
+  opacity: 0;
+}
+
 @keyframes home-notices-pulse {
   0% {
     opacity: 0.8;

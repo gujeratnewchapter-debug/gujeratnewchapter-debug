@@ -25,6 +25,7 @@ import { useI18n } from '@/lib/i18n';
 import { CourseCard } from '@/components/CourseCard';
 import { HomeNewsSection } from '@/components/HomeNewsSection';
 import { getSignInProcessSteps } from '@/lib/sign-in-guide';
+import { getHomeNoticesCallout } from '@/lib/home-notices-callout';
 
 const AI_MODES = [
   { icon: GraduationCap, label: 'AI Tutor', mode: 'tutor', desc: 'Explains concepts, summarizes lessons, and drills you with practice quizzes whenever you\u2019re stuck.' },
@@ -93,6 +94,7 @@ export default function HomePage() {
   }
 
   const localizedHome = homeContent?.content?.[lang] ?? {};
+  const noticesCallout = getHomeNoticesCallout(homeContent?.content, lang);
   const homeSections = homeContent?.sections ?? [];
   const homeItems = (key: string) => {
     const section = homeSections.find((item: any) => item.key === key);
@@ -157,12 +159,17 @@ export default function HomePage() {
         </div>
       </section>
 
-      <div className="container home-notices-callout-row">
-        <Link href="/notices" className="home-notices-callout" aria-label="New notices">
-          <span>New</span>
-          <span className="home-notices-indicator" aria-hidden="true" />
-        </Link>
-      </div>
+      {noticesCallout.visible && (
+        <div className="container home-notices-callout-row">
+          <Link href="/notices" className="home-notices-callout" aria-label={`${noticesCallout.label} notices`}>
+            <span>{noticesCallout.label}</span>
+            <span
+              className={`home-notices-indicator${noticesCallout.pulse ? '' : ' home-notices-indicator--static'}`}
+              aria-hidden="true"
+            />
+          </Link>
+        </div>
+      )}
 
       {categories.length > 0 && (
         <section className="container home-category-list" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 48 }}>
