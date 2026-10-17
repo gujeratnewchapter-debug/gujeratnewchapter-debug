@@ -249,7 +249,6 @@ export default function HomePage() {
                 </li>
               ))}
             </ol>
-            <Link href="/notices" className="signin-guide-notices">{t('notices')}</Link>
           </section>
         </div>
       </section>

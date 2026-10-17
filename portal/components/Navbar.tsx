@@ -78,7 +78,6 @@ export function Navbar() {
             <Link href="/" className={pathname === '/' ? 'active' : ''}>{t('home')}</Link>
             <Link href="/about-us" className={pathname === '/about-us' ? 'active' : ''}>{t('aboutUs')}</Link>
             <Link href="/courses" className={pathname?.startsWith('/courses') ? 'active' : ''}>{t('courses')}</Link>
-            <Link href="/notices" className={pathname?.startsWith('/notices') ? 'active' : ''}>{t('notices')}</Link>
             <Link href="/ai/business-advisor" className={pathname?.startsWith('/ai') ? 'active' : ''}>{t('ai')}</Link>
             <Link href="/services/business-consultant" className={pathname?.startsWith('/services') ? 'active' : ''}>{t('services')}</Link>
             <Link href="/startup-ecosystem" className={pathname?.startsWith('/startup-ecosystem') ? 'active' : ''}>{t('startupEcosystem')}</Link>
@@ -175,7 +174,6 @@ export function Navbar() {
               <Link href="/" onClick={() => setMenuOpen(false)} className={pathname === '/' ? 'active' : ''}>{t('home')}</Link>
               <Link href="/about-us" onClick={() => setMenuOpen(false)}>{t('aboutUs')}</Link>
               <Link href="/courses" onClick={() => setMenuOpen(false)} className={pathname?.startsWith('/courses') ? 'active' : ''}>{t('courses')}</Link>
-              <Link href="/notices" onClick={() => setMenuOpen(false)} className={pathname?.startsWith('/notices') ? 'active' : ''}>{t('notices')}</Link>
               <Link href="/ai/business-advisor" onClick={() => setMenuOpen(false)}>{t('ai')}</Link>
               <Link href="/services/business-consultant" onClick={() => setMenuOpen(false)}>{t('services')}</Link>
               <Link href="/startup-ecosystem" onClick={() => setMenuOpen(false)}>{t('startupEcosystem')}</Link>
