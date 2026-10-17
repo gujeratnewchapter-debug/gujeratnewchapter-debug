@@ -24,7 +24,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { CourseCard } from '@/components/CourseCard';
 import { HomeNewsSection } from '@/components/HomeNewsSection';
-import { splitSignInProcess } from '@/lib/sign-in-guide';
+import { getSignInProcessSteps } from '@/lib/sign-in-guide';
 
 const AI_MODES = [
   { icon: GraduationCap, label: 'AI Tutor', mode: 'tutor', desc: 'Explains concepts, summarizes lessons, and drills you with practice quizzes whenever you\u2019re stuck.' },
@@ -36,11 +36,6 @@ const STEPS = [
   { title: 'Enroll in a course', desc: 'Pick a path in entrepreneurship, AI, finance, marketing, or leadership \u2014 most start free.' },
   { title: 'Learn with AI at every step', desc: 'Watch, read, and ask your AI Tutor questions the moment something didn\u2019t click.' },
   { title: 'Pass to unlock, then get certified', desc: 'Clear each lesson\u2019s quiz to move forward, and earn a QR-verified certificate on completion.' },
-];
-const SIGN_IN_PROCESS_STEPS = [
-  { title: 'Create your account', desc: 'Sign up with your email, or continue with Google or GitHub.' },
-  { title: 'Verify your email', desc: 'If you signed up with email, open the verification link we send before signing in.' },
-  { title: 'Sign in and start learning', desc: 'Choose a course and continue learning with your AI Tutor.' },
 ];
 export default function HomePage() {
   const { t, lang } = useI18n();
@@ -112,10 +107,13 @@ export default function HomePage() {
   });
   const configuredSteps = homeItems('how-it-works');
   const steps = (configuredSteps.length ? configuredSteps : STEPS).map((item: any, index: number) => Array.isArray(item) ? { title: item[0], desc: item[1] } : item || STEPS[index]);
-  const configuredSignInProcess = homeItems('sign-in-process');
-  const signInProcess = (configuredSignInProcess.length ? configuredSignInProcess : SIGN_IN_PROCESS_STEPS)
-    .map((item: any) => Array.isArray(item) ? { title: item[0], desc: item[1] } : item);
-  const { accountSetupSteps, learningSteps } = splitSignInProcess(signInProcess);
+  const signInProcessSection = homeSections.find((item: any) => item.key === 'sign-in-process');
+  const {
+    accountSetupTitle,
+    learningTitle,
+    accountSetupSteps,
+    learningSteps,
+  } = getSignInProcessSteps(signInProcessSection?.content, lang);
 
   return (
     <div className="homepage-shell">
@@ -145,7 +143,7 @@ export default function HomePage() {
             <form className="home-search-form" onSubmit={handleSearch} style={{ display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto', alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
                 <Search size={16} style={{ position: 'absolute', left: 14, top: 13, color: 'var(--text-muted)' }} />
-                <input className="input" style={{ paddingLeft: 38 }} placeholder={t('searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input className="input" style={{ paddingLeft: 38 }} aria-label={t('searchPlaceholder')} placeholder={t('searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <button className="btn btn-accent" type="submit" style={{ transform: 'translateZ(0)' }}>{t('exploreCourses')}</button>
             </form>
@@ -158,6 +156,13 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <div className="container home-notices-callout-row">
+        <Link href="/notices" className="home-notices-callout" aria-label="New notices">
+          <span>New</span>
+          <span className="home-notices-indicator" aria-hidden="true" />
+        </Link>
+      </div>
 
       {categories.length > 0 && (
         <section className="container home-category-list" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 48 }}>
@@ -216,8 +221,8 @@ export default function HomePage() {
         </div>
         <div className="signin-guide-grid">
           <section className="signin-guide-panel" aria-labelledby="account-setup-title">
-            <p className="signin-guide-kicker">01 — 02</p>
-            <h3 id="account-setup-title">Set up your account</h3>
+            <p className="signin-guide-kicker">01 — 07</p>
+            <h3 id="account-setup-title">{accountSetupTitle}</h3>
             <ol className="signin-guide-steps">
               {accountSetupSteps.map((item: any, index: number) => (
                 <li className="signin-guide-step" key={item.title || index}>
@@ -231,12 +236,12 @@ export default function HomePage() {
             </ol>
           </section>
           <section className="signin-guide-panel signin-guide-panel-start" aria-labelledby="start-learning-title">
-            <p className="signin-guide-kicker">03 — START</p>
-            <h3 id="start-learning-title">Start learning</h3>
-            <ol className="signin-guide-steps" start={3}>
+            <p className="signin-guide-kicker">01 — 06</p>
+            <h3 id="start-learning-title">{learningTitle}</h3>
+            <ol className="signin-guide-steps">
               {learningSteps.map((item: any, index: number) => (
                 <li className="signin-guide-step" key={item.title || index}>
-                  <span className="signin-guide-number">{String(index + 3).padStart(2, '0')}</span>
+                  <span className="signin-guide-number">{String(index + 1).padStart(2, '0')}</span>
                   <div>
                     <h4>{item.title}</h4>
                     <p>{item.desc}</p>
