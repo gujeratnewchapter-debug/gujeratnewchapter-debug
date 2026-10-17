@@ -155,3 +155,111 @@ class SignInProcessMigrationTests(TransactionTestCase):
         self.assertEqual(section.content, content)
         self.assertEqual(section.order, 27)
         self.assertFalse(section.is_published)
+
+
+class LegacySignInProcessMigrationTests(TransactionTestCase):
+    migrate_from = ('site_settings', '0012_seed_sign_in_process')
+    migrate_to = ('site_settings', '0013_split_legacy_sign_in_steps')
+
+    def migrate_to_target(self, target):
+        executor = MigrationExecutor(connection)
+        executor.migrate([target])
+        return executor.loader.project_state([target]).apps
+
+    def setUp(self):
+        super().setUp()
+        apps = self.migrate_to_target(self.migrate_from)
+        PageContent = apps.get_model('site_settings', 'PageContent')
+        PageSection = apps.get_model('site_settings', 'PageSection')
+        home, _ = PageContent.objects.get_or_create(
+            slug='home',
+            defaults={
+                'title': 'Ethiopian Startup School',
+                'description': 'Learn entrepreneurship, AI, and business skills with practical guidance.',
+            },
+        )
+        self.section, _ = PageSection.objects.get_or_create(
+            page=home,
+            key='sign-in-process',
+            defaults={
+                'title': 'Sign in and get started',
+                'body': '',
+                'content': {},
+                'order': 2,
+                'is_published': True,
+            },
+        )
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+    def test_migration_splits_all_existing_legacy_items_without_discarding_them(self):
+        items = [
+            [f'Admin step {index}', f'Admin description {index}']
+            for index in range(1, 14)
+        ]
+        legacy_content = {
+            'items': items,
+            'custom_note': 'Keep this CMS value.',
+        }
+        self.section.content = legacy_content
+        self.section.title = 'Existing sign-in help'
+        self.section.save(update_fields=['content', 'title'])
+
+        apps = self.migrate_to_target(self.migrate_to)
+        PageSection = apps.get_model('site_settings', 'PageSection')
+        section = PageSection.objects.get(
+            page__slug='home',
+            key='sign-in-process',
+        )
+
+        self.assertEqual(section.title, 'Existing sign-in help')
+        self.assertEqual(section.content['custom_note'], 'Keep this CMS value.')
+        self.assertEqual(section.content['items'], items)
+        self.assertEqual(
+            len(section.content['account_setup_steps']),
+            7,
+        )
+        self.assertEqual(
+            len(section.content['learning_steps']),
+            6,
+        )
+        self.assertEqual(
+            section.content['account_setup_steps'][0],
+            {'title': 'Admin step 1', 'desc': 'Admin description 1'},
+        )
+        self.assertEqual(
+            section.content['account_setup_steps'][-1],
+            {'title': 'Admin step 7', 'desc': 'Admin description 7'},
+        )
+        self.assertEqual(
+            section.content['learning_steps'][0],
+            {'title': 'Admin step 8', 'desc': 'Admin description 8'},
+        )
+        self.assertEqual(
+            section.content['learning_steps'][-1],
+            {'title': 'Admin step 13', 'desc': 'Admin description 13'},
+        )
+
+    def test_migration_does_not_replace_structured_admin_edits(self):
+        structured_content = {
+            'en': {
+                'account_setup_title': 'Custom setup',
+                'learning_title': 'Custom learning',
+                'account_setup_steps': [{'title': f'A{i}', 'desc': f'Ad{i}'} for i in range(7)],
+                'learning_steps': [{'title': f'L{i}', 'desc': f'Ld{i}'} for i in range(6)],
+            },
+        }
+        self.section.content = structured_content
+        self.section.save(update_fields=['content'])
+
+        apps = self.migrate_to_target(self.migrate_to)
+        PageSection = apps.get_model('site_settings', 'PageSection')
+        section = PageSection.objects.get(
+            page__slug='home',
+            key='sign-in-process',
+        )
+
+        self.assertEqual(section.content, structured_content)

@@ -48,16 +48,16 @@ test('falls back to exactly seven account steps and six learning steps', () => {
   assert.ok(sections.learningSteps.every(({ title, desc }) => title && desc));
 });
 
-test('continues parsing legacy items with the former two-account-step split', () => {
+test('continues parsing all thirteen legacy items as seven account and six learning steps', () => {
   const items = Array.from({ length: 13 }, (_, index) => [`Legacy ${index + 1}`, `Description ${index + 1}`]);
   const sections = getSignInProcessSteps({ en: { items } }, 'en');
 
   assert.equal(sections.accountSetupSteps.length, 7);
   assert.equal(sections.learningSteps.length, 6);
   assert.deepEqual(sections.accountSetupSteps[0], { title: 'Legacy 1', desc: 'Description 1' });
-  assert.deepEqual(sections.accountSetupSteps[1], { title: 'Legacy 2', desc: 'Description 2' });
-  assert.deepEqual(sections.learningSteps[0], { title: 'Legacy 3', desc: 'Description 3' });
-  assert.deepEqual(sections.learningSteps[5], { title: 'Legacy 8', desc: 'Description 8' });
+  assert.deepEqual(sections.accountSetupSteps[6], { title: 'Legacy 7', desc: 'Description 7' });
+  assert.deepEqual(sections.learningSteps[0], { title: 'Legacy 8', desc: 'Description 8' });
+  assert.deepEqual(sections.learningSteps[5], { title: 'Legacy 13', desc: 'Description 13' });
   assert.equal(sections.accountSetupTitle, 'Set up your account');
   assert.equal(sections.learningTitle, 'Start learning');
 });

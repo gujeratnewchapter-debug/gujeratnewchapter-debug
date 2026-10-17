@@ -83,9 +83,9 @@ export function getSignInProcessSteps(content: unknown, lang = 'en') {
   return {
     accountSetupTitle: accountSetupTitle || 'Set up your account',
     learningTitle: learningTitle || 'Start learning',
-    accountSetupSteps: fillSteps(legacyItems.slice(0, 2), ACCOUNT_SETUP_FALLBACKS),
+    accountSetupSteps: fillSteps(legacyItems.slice(0, ACCOUNT_SETUP_FALLBACKS.length), ACCOUNT_SETUP_FALLBACKS),
     learningSteps: fillSteps(
-      legacyItems.slice(2, 2 + LEARNING_FALLBACKS.length),
+      legacyItems.slice(ACCOUNT_SETUP_FALLBACKS.length, ACCOUNT_SETUP_FALLBACKS.length + LEARNING_FALLBACKS.length),
       LEARNING_FALLBACKS,
     ),
   };
