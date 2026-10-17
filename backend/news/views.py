@@ -1,8 +1,8 @@
 from rest_framework import permissions, viewsets
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 
-from .models import Article
-from .serializers import ArticleSerializer
+from .models import Article, Notice
+from .serializers import ArticleSerializer, NoticeSerializer
 
 
 class ArticleViewSet(viewsets.ModelViewSet):
@@ -18,6 +18,23 @@ class ArticleViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('featured', '').lower() == 'true':
             articles = articles.filter(is_published=True, is_featured=True)
         return articles.order_by('-published_at', '-created_at')
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.AllowAny()]
+        return [permissions.IsAdminUser()]
+
+
+class NoticeViewSet(viewsets.ModelViewSet):
+    serializer_class = NoticeSerializer
+    lookup_field = 'slug'
+    lookup_url_kwarg = 'slug'
+
+    def get_queryset(self):
+        notices = Notice.objects.all()
+        if not self.request.user.is_staff:
+            notices = notices.filter(is_published=True)
+        return notices.order_by('-created_at', '-pk')
 
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:

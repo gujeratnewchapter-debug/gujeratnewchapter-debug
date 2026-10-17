@@ -4,6 +4,7 @@ export const STRINGS = {
   home: { en: 'Home', am: 'መነሻ', om: 'Mana', ti: 'መነሻ' },
   aiTutor: { en: 'AI Tutor', am: 'AI አስተማሪ', om: 'Barsiisaa AI', ti: 'AI መምህር' },
   courses: { en: 'Courses', am: 'ኮርሶች', om: 'Koorsii', ti: 'ኮርስታት' },
+  notices: { en: 'Notices', am: 'ማስታወቂያዎች', om: 'Beeksisa', ti: 'ምልክታታት' },
   signIn: { en: 'Sign in', am: 'ግባ', om: 'Seeni', ti: 'እቶ' },
   signUp: { en: 'Sign up', am: 'ተመዝገብ', om: "Galmaa'i", ti: 'ተመዝገብ' },
   continueWithGoogle: { en: 'Continue with Google', am: 'በGoogle ይቀጥሉ', om: "Google'n itti fufi", ti: 'ብGoogle ቀጽል' },

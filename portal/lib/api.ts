@@ -317,6 +317,16 @@ export type NewsArticle = {
   updated_at: string;
 };
 
+export type Notice = {
+  id: number;
+  title: string;
+  slug: string;
+  body: string;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export const getNews = (): Promise<AxiosResponse<NewsArticle[]>> =>
   apiClient.get('/news/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
 export const getFeaturedNews = (): Promise<AxiosResponse<NewsArticle[]>> =>
@@ -332,6 +342,8 @@ export const updateNewsArticle = (slug: string, payload: FormData) =>
   apiClient.patch(`/news/${encodeURIComponent(slug)}/`, payload, { timeout: AUTH_REQUEST_TIMEOUT });
 export const deleteNewsArticle = (slug: string) =>
   apiClient.delete(`/news/${encodeURIComponent(slug)}/`, { timeout: AUTH_REQUEST_TIMEOUT });
+export const getNotices = (): Promise<AxiosResponse<Notice[]>> =>
+  apiClient.get('/notices/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
 
 // ---- Courses ----
 export const getCourses = (params?: Record<string, any>) => apiClient.get('/courses/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { ...params, _fresh: Date.now() } });

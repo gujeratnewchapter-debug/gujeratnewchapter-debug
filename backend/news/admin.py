@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from django.utils import timezone
 
-from .models import Article
+from .models import Article, Notice
 
 
 @admin.action(description='Publish selected articles')
@@ -52,3 +53,20 @@ class ArticleAdmin(admin.ModelAdmin):
             article.featured_image.url,
             article.image_alt_text,
         )
+
+
+@admin.register(Notice)
+class NoticeAdmin(admin.ModelAdmin):
+    list_display = ('title', 'is_published', 'created_at', 'updated_at')
+    list_filter = ('is_published', 'created_at')
+    search_fields = ('title', 'slug', 'body')
+    readonly_fields = ('slug', 'created_at', 'updated_at')
+    actions = ('publish_notices', 'unpublish_notices')
+
+    @admin.action(description='Publish selected notices')
+    def publish_notices(self, request, queryset):
+        queryset.update(is_published=True, updated_at=timezone.now())
+
+    @admin.action(description='Unpublish selected notices')
+    def unpublish_notices(self, request, queryset):
+        queryset.update(is_published=False, updated_at=timezone.now())

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Article
+from .models import Article, Notice
 
 
 class ArticleSerializer(serializers.ModelSerializer):
@@ -26,3 +26,18 @@ class ArticleSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class NoticeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notice
+        fields = [
+            'id',
+            'title',
+            'slug',
+            'body',
+            'is_published',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']

@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from .models import Article
+from .models import Article, Notice
 
 
 User = get_user_model()
@@ -164,3 +164,96 @@ class ArticleApiTests(TestCase):
         response = self.client.post(reverse('news-article-list'), {}, format='json')
 
         self.assertEqual(response.status_code, 403)
+
+
+class NoticeApiTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff = User.objects.create_user(
+            username='notice-editor', email='notice-editor@example.com', password='Password123!',
+            is_staff=True,
+        )
+        cls.student = User.objects.create_user(
+            username='notice-reader', email='notice-reader@example.com', password='Password123!',
+        )
+        cls.older = Notice.objects.create(
+            title='Earlier notice',
+            body='An earlier public update.',
+            is_published=True,
+        )
+        cls.newer = Notice.objects.create(
+            title='Latest notice',
+            body='The latest public update.',
+            is_published=True,
+        )
+        cls.draft = Notice.objects.create(
+            title='Internal draft',
+            body='This notice is not ready to publish.',
+            is_published=False,
+        )
+        Notice.objects.filter(pk=cls.older.pk).update(created_at=cls.older.created_at - timedelta(days=1))
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_public_list_contains_only_published_notices_newest_first(self):
+        response = self.client.get(reverse('news-notice-list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item['slug'] for item in response.json()],
+            [self.newer.slug, self.older.slug],
+        )
+
+    def test_public_detail_hides_drafts(self):
+        published = self.client.get(reverse('news-notice-detail', args=[self.newer.slug]))
+        draft = self.client.get(reverse('news-notice-detail', args=[self.draft.slug]))
+
+        self.assertEqual(published.status_code, 200)
+        self.assertEqual(published.json()['body'], self.newer.body)
+        self.assertEqual(draft.status_code, 404)
+
+    def test_anonymous_and_non_staff_cannot_write_notices(self):
+        anonymous_response = self.client.post(
+            reverse('news-notice-list'),
+            {'title': 'Unauthorized notice', 'body': 'No write access.'},
+            format='json',
+        )
+        self.assertIn(anonymous_response.status_code, (401, 403))
+
+        self.client.force_authenticate(self.student)
+        student_response = self.client.post(
+            reverse('news-notice-list'),
+            {'title': 'Unauthorized notice', 'body': 'No write access.'},
+            format='json',
+        )
+        self.assertEqual(student_response.status_code, 403)
+
+        detail_url = reverse('news-notice-detail', args=[self.newer.slug])
+        self.assertEqual(self.client.patch(detail_url, {'is_published': False}, format='json').status_code, 403)
+        self.assertEqual(self.client.delete(detail_url).status_code, 403)
+
+    def test_staff_can_create_publish_update_and_delete_notices(self):
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            reverse('news-notice-list'),
+            {'title': 'New public notice', 'body': 'Registration opens next week.', 'is_published': True},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        notice = Notice.objects.get(slug='new-public-notice')
+        detail_url = reverse('news-notice-detail', args=[notice.slug])
+
+        self.assertTrue(notice.is_published)
+        self.assertEqual(response.data['slug'], notice.slug)
+        self.assertEqual(self.client.patch(detail_url, {'is_published': False}, format='json').status_code, 200)
+        self.assertEqual(self.client.delete(detail_url).status_code, 204)
+
+    def test_staff_can_read_unpublished_notices(self):
+        self.client.force_authenticate(self.staff)
+
+        response = self.client.get(reverse('news-notice-detail', args=[self.draft.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['is_published'])

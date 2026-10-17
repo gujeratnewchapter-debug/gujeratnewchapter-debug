@@ -24,6 +24,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { CourseCard } from '@/components/CourseCard';
 import { HomeNewsSection } from '@/components/HomeNewsSection';
+import { splitSignInProcess } from '@/lib/sign-in-guide';
 
 const AI_MODES = [
   { icon: GraduationCap, label: 'AI Tutor', mode: 'tutor', desc: 'Explains concepts, summarizes lessons, and drills you with practice quizzes whenever you\u2019re stuck.' },
@@ -114,6 +115,7 @@ export default function HomePage() {
   const configuredSignInProcess = homeItems('sign-in-process');
   const signInProcess = (configuredSignInProcess.length ? configuredSignInProcess : SIGN_IN_PROCESS_STEPS)
     .map((item: any) => Array.isArray(item) ? { title: item[0], desc: item[1] } : item);
+  const { accountSetupSteps, learningSteps } = splitSignInProcess(signInProcess);
 
   return (
     <div className="homepage-shell">
@@ -205,20 +207,45 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="container section home-steps-section">
-        <h2 className="home-section-title" style={{ fontSize: 26, marginBottom: 28, textAlign: 'center' }}>
-          {homeSections.find((item: any) => item.key === 'sign-in-process')?.title || 'Sign-In Process'}
-        </h2>
-        <div className="home-steps-list" style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 560, margin: '0 auto' }}>
-          {signInProcess.map((item: any, index: number) => (
-            <div key={item.title || index} className="step-item">
-              <span className="step-num">{String(index + 1).padStart(2, '0')}</span>
-              <div>
-                <p style={{ fontWeight: 600, margin: '0 0 4px', fontSize: 16 }}>{item.title}</p>
-                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14, lineHeight: 1.5 }}>{item.desc}</p>
-              </div>
-            </div>
-          ))}
+      <section className="container section home-steps-section signin-guide" aria-labelledby="signin-guide-title">
+        <div className="signin-guide-heading">
+          <p className="news-eyebrow">A simple first step</p>
+          <h2 id="signin-guide-title" className="home-section-title">
+            {homeSections.find((item: any) => item.key === 'sign-in-process')?.title || 'Sign in and get started'}
+          </h2>
+        </div>
+        <div className="signin-guide-grid">
+          <section className="signin-guide-panel" aria-labelledby="account-setup-title">
+            <p className="signin-guide-kicker">01 — 02</p>
+            <h3 id="account-setup-title">Set up your account</h3>
+            <ol className="signin-guide-steps">
+              {accountSetupSteps.map((item: any, index: number) => (
+                <li className="signin-guide-step" key={item.title || index}>
+                  <span className="signin-guide-number">{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h4>{item.title}</h4>
+                    <p>{item.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+          <section className="signin-guide-panel signin-guide-panel-start" aria-labelledby="start-learning-title">
+            <p className="signin-guide-kicker">03 — START</p>
+            <h3 id="start-learning-title">Start learning</h3>
+            <ol className="signin-guide-steps" start={3}>
+              {learningSteps.map((item: any, index: number) => (
+                <li className="signin-guide-step" key={item.title || index}>
+                  <span className="signin-guide-number">{String(index + 3).padStart(2, '0')}</span>
+                  <div>
+                    <h4>{item.title}</h4>
+                    <p>{item.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <Link href="/notices" className="signin-guide-notices">{t('notices')}</Link>
+          </section>
         </div>
       </section>
 
