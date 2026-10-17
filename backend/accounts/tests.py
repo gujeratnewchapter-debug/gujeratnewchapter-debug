@@ -85,6 +85,28 @@ class LoginEmailRegressionTests(TestCase):
         self.assertIn('access', payload)
         self.assertIn('refresh', payload)
 
+    def test_login_refresh_token_renews_access_for_same_user(self):
+        login_response = self.client.post(
+            reverse('login'),
+            {'username': 'alice@example.com', 'password': 'Password123!'},
+            content_type='application/json',
+        )
+        refresh_response = self.client.post(
+            reverse('login_refresh'),
+            {'refresh': login_response.json()['refresh']},
+            content_type='application/json',
+        )
+
+        self.assertEqual(refresh_response.status_code, 200, refresh_response.content)
+        profile_response = self.client.get(
+            reverse('me'),
+            HTTP_AUTHORIZATION=f"Bearer {refresh_response.json()['access']}",
+        )
+
+        self.assertEqual(profile_response.status_code, 200, profile_response.content)
+        self.assertEqual(profile_response.json()['id'], self.user.id)
+        self.assertEqual(profile_response.json()['role'], User.Role.STUDENT)
+
     def test_session_sync_requires_bearer_authentication(self):
         response = self.client.get(reverse('session_sync'))
 

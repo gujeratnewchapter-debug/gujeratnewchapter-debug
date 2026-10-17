@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 from accounts.models import User
 from courses.models import Course
-from .models import Conversation, Message
-from .services import AIServiceUnavailable, get_ai_reply
+from .models import Conversation, KnowledgeDocument, Message
+from .services import AIServiceUnavailable, get_ai_reply, retrieve_context
 from .serializers import ConversationSerializer, KnowledgeDocumentSerializer
 
 
@@ -39,6 +39,104 @@ class AIAuthorizationTests(TestCase):
 
 		self.assertFalse(serializer.is_valid())
 		self.assertIn('course', serializer.errors)
+
+
+class KnowledgeRetrievalTests(TestCase):
+	def setUp(self):
+		self.owner = User.objects.create_user(
+			username='retrieval_owner', password='pass123', role=User.Role.INSTRUCTOR,
+		)
+		self.course = Course.objects.create(
+			title='Customer Discovery', slug='customer-discovery', description='Course',
+			instructor=self.owner, status=Course.Status.PUBLISHED,
+		)
+
+	def test_retrieval_normalizes_case_and_punctuation_and_returns_cited_sources(self):
+		relevant = KnowledgeDocument.objects.create(
+			title='Interview Guide',
+			source_type=KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			raw_text='Use customer interviews to validate the problem before building a startup product.',
+			is_indexed=True,
+		)
+		KnowledgeDocument.objects.create(
+			title='Distribution',
+			source_type=KnowledgeDocument.SourceType.POLICY,
+			raw_text='Choose marketing channels and measure campaign performance.',
+			is_indexed=True,
+		)
+		KnowledgeDocument.objects.create(
+			title='Unindexed',
+			source_type=KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			raw_text='Customer interviews validate the problem.',
+			is_indexed=False,
+		)
+
+		context, sources = retrieve_context('CUSTOMER, discovery!')
+
+		self.assertIn('[Source: Interview Guide]', context)
+		self.assertEqual(
+			sources,
+			[{
+				'id': relevant.id,
+				'title': 'Interview Guide',
+				'source_type': KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			}],
+		)
+
+	def test_retrieval_respects_course_filter_and_top_k(self):
+		course_document = KnowledgeDocument.objects.create(
+			title='Course customer guide',
+			source_type=KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			course=self.course,
+			raw_text='Interview customers to validate startup demand.',
+			is_indexed=True,
+		)
+		KnowledgeDocument.objects.create(
+			title='Course customer checklist',
+			source_type=KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			course=self.course,
+			raw_text='Interview customers and validate startup demand.',
+			is_indexed=True,
+		)
+		KnowledgeDocument.objects.create(
+			title='General customer policy',
+			source_type=KnowledgeDocument.SourceType.POLICY,
+			raw_text='Interview customers before launching.',
+			is_indexed=True,
+		)
+
+		context, sources = retrieve_context('interview customers', course=self.course, top_k=1)
+
+		self.assertIn('[Source: Course customer guide]', context)
+		self.assertEqual([source['id'] for source in sources], [course_document.id])
+
+	def test_title_matches_rank_above_longer_body_only_matches(self):
+		title_match = KnowledgeDocument.objects.create(
+			title='Customer Discovery Interviews',
+			source_type=KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			raw_text='A short practical guide.',
+			is_indexed=True,
+		)
+		KnowledgeDocument.objects.create(
+			title='General Guide',
+			source_type=KnowledgeDocument.SourceType.POLICY,
+			raw_text=('Customer discovery interviews ' + 'business ' * 80),
+			is_indexed=True,
+		)
+
+		_, sources = retrieve_context('customer discovery interviews')
+
+		self.assertEqual(sources[0]['id'], title_match.id)
+
+	def test_stopword_only_query_returns_no_context(self):
+		KnowledgeDocument.objects.create(
+			title='Business basics',
+			source_type=KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			raw_text='Business startup fundamentals.',
+			is_indexed=True,
+		)
+
+		self.assertEqual(retrieve_context('how do I'), ('', []))
 
 
 class AIMessageTests(APITestCase):

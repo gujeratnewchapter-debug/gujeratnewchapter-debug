@@ -1,0 +1,16 @@
+DRAFT - NEEDS NATIVE REVIEW - DO NOT SEND
+
+{{ if .Data.full_name }}{{ .Data.full_name }}{{ else }}Barataa{{ end }} nagaa,
+
+Baga gara Ethiopian Startup School dhuftan! Barataa ta'uuf tarkaanfii jalqabaa fudhattaniif baga gammaddan. Akkaawuntii keessan hojii irra oolchuuf imeelii keessan mirkaneessaa:
+{{ .ConfirmationURL }}
+
+Erga mirkanaa'ee booda koorsoota bilisaa galmaa'uu, gargaartota AI waliin barachuu, qormaata tokkoon tokkoon irratti 80% argachuun gara barnoota itti aanuutti ce'uu, akkasumas ragaa QR'n mirkanaa'e argachuu dandeessu.
+
+Yoo akkaawuntii kana hin uumne ta'e, imeelii kana dhiisuu dandeessu.
+
+Kabajaan,
+Garee Ethiopian Startup School
+Finfinnee, Itoophiyaa
+{{ .SiteURL }}
+{{ .Email }}

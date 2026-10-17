@@ -1,0 +1,10 @@
+{{ if .Data.full_name }}Dear {{ .Data.full_name }},{{ else }}Dear Learner,{{ end }}
+
+You have been invited to join Ethiopian Startup School. Accept your invitation using this secure link:
+{{ .ConfirmationURL }}
+
+Warm regards,
+The Ethiopian Startup School Team
+Addis Ababa, Ethiopia
+{{ .SiteURL }}
+Sent to: {{ .Email }}

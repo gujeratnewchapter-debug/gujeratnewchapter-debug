@@ -20,7 +20,7 @@ export default function VerifyEmailPage() {
         if (token) {
           const { data } = await verifyEmail(token);
           if (!data?.access) throw new Error('Verification succeeded but no sign-in token was returned.');
-          setDjangoAuthToken(data.access);
+          setDjangoAuthToken(data.access, data.refresh || null);
           setStatus('success');
           window.setTimeout(() => window.location.assign('/dashboard'), 1200);
           return;

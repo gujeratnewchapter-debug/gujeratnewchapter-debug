@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'site_settings',
     'ess_platform',
     'news',
+    'feature_flags.apps.FeatureFlagsConfig',
 ]
 
 # If the project defines a custom user model, set it here

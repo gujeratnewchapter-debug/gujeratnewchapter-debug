@@ -1,0 +1,16 @@
+DRAFT - NEEDS NATIVE REVIEW - DO NOT SEND
+
+{{ if .Data.full_name }}{{ .Data.full_name }}{{ else }}ተማሪ{{ end }} ሰላም፣
+
+ወደ Ethiopian Startup School እንኳን በደህና መጡ! ተማሪ ለመሆን የጀመሩትን የመጀመሪያ እርምጃ እናመሰግናለን። መለያዎን ለማንቃት ኢሜይል አድራሻዎን ያረጋግጡ፦
+{{ .ConfirmationURL }}
+
+ከተረጋገጠ በኋላ በነጻ ትምህርቶች መመዝገብ፣ ከAI አስተማሪዎች ጋር መማር፣ በእያንዳንዱ የትምህርት ፈተና 80% በማምጣት ወደ ቀጣዩ መማር እና QR የተረጋገጠ ሰርተፍኬት ማግኘት ይችላሉ።
+
+ይህን መለያ ካልፈጠሩ ይህን ኢሜይል ችላ ማለት ይችላሉ።
+
+ከሰላምታ ጋር፣
+የEthiopian Startup School ቡድን
+አዲስ አበባ፣ ኢትዮጵያ
+{{ .SiteURL }}
+{{ .Email }}

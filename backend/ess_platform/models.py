@@ -55,3 +55,60 @@ class PlatformStat(models.Model):
 
     def __str__(self):
         return self.label
+
+
+class StartupProject(models.Model):
+    class Stage(models.TextChoices):
+        IDEA = 'idea', 'Idea'
+        VALIDATION = 'validation', 'Validation'
+        MVP = 'mvp', 'Minimum viable product'
+        LAUNCH = 'launch', 'Launch'
+        GROWTH = 'growth', 'Growth'
+
+    class Status(models.TextChoices):
+        ACTIVE = 'active', 'Active'
+        PAUSED = 'paused', 'Paused'
+        COMPLETED = 'completed', 'Completed'
+
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='startup_projects')
+    title = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    industry = models.CharField(max_length=100, blank=True)
+    stage = models.CharField(max_length=20, choices=Stage.choices, default=Stage.IDEA)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    problem = models.TextField(blank=True)
+    solution = models.TextField(blank=True)
+    target_market = models.TextField(blank=True)
+    value_proposition = models.TextField(blank=True)
+    business_model = models.TextField(blank=True)
+    next_steps = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+
+    def __str__(self):
+        return self.title
+
+
+class StartupMilestone(models.Model):
+    class Status(models.TextChoices):
+        NOT_STARTED = 'not_started', 'Not started'
+        IN_PROGRESS = 'in_progress', 'In progress'
+        COMPLETED = 'completed', 'Completed'
+
+    project = models.ForeignKey(StartupProject, on_delete=models.CASCADE, related_name='milestones')
+    title = models.CharField(max_length=160)
+    details = models.TextField(blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_STARTED)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f'{self.project.title} - {self.title}'

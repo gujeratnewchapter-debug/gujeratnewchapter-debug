@@ -1,0 +1,21 @@
+{{ if .Data.full_name }}Dear {{ .Data.full_name }},{{ else }}Dear Learner,{{ end }}
+
+Welcome to Ethiopian Startup School, and congratulations on taking the first step to becoming a learner with us!
+
+Please confirm your email address to activate your account:
+{{ .ConfirmationURL }}
+
+Once confirmed, you can:
+- Enroll in free courses in entrepreneurship, startups, AI, finance, and leadership.
+- Learn with your AI Tutor, Startup Mentor, and Business Coach.
+- Pass each lesson quiz with 80% to unlock the next lesson.
+- Earn a QR-verified certificate.
+
+If you did not create this account, you can safely ignore this email.
+
+Warm regards,
+The Ethiopian Startup School Team
+Addis Ababa, Ethiopia
+{{ .SiteURL }}
+
+Sent to: {{ .Email }}

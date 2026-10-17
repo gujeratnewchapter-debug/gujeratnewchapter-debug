@@ -3,6 +3,7 @@ import type { AxiosResponse } from 'axios';
 import { supabase } from './supabase';
 import {
   getStoredDjangoAccessToken,
+  getStoredDjangoRefreshToken,
   isCompactJwtToken,
   isExpiredDjangoAccessToken,
   isUsableJwtToken,
@@ -22,6 +23,7 @@ export const API_BASE_URL =
 const COURSE_DETAIL_CACHE_MS = 15_000;
 const courseDetailRequests = new Map<string, { expiresAt: number; promise: Promise<any> }>();
 const sessionExchangeRequests = new Map<string, Promise<any>>();
+const djangoRefreshRequests = new Map<string, Promise<AxiosResponse<any> | null>>();
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
 export const DJANGO_AUTH_TOKEN_UPDATED_EVENT = 'django-auth-token-updated';
@@ -52,6 +54,56 @@ function clearCourseDetailRequests() {
   courseDetailRequests.clear();
 }
 
+async function refreshDjangoSession(refreshToken: string) {
+  const pending = djangoRefreshRequests.get(refreshToken);
+  if (pending) return pending;
+
+  const request = axios.post(
+    `${API_BASE_URL.replace(/\/+$/, '')}/auth/login/refresh/`,
+    { refresh: refreshToken },
+    { timeout: AUTH_REQUEST_TIMEOUT },
+  ).then((response) => {
+    if (!isUsableJwtToken(response.data?.access)) {
+      throw new Error('Django returned an invalid access token during session renewal.');
+    }
+    return response;
+  }).catch((error) => {
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    console.warn(
+      'Django session renewal failed:',
+      status ?? (error instanceof Error ? error.message : 'Unknown error'),
+    );
+    return null;
+  });
+
+  djangoRefreshRequests.set(refreshToken, request);
+  void request.finally(() => {
+    if (djangoRefreshRequests.get(refreshToken) === request) {
+      djangoRefreshRequests.delete(refreshToken);
+    }
+  }).catch(() => undefined);
+  return request;
+}
+
+async function refreshLearningSession() {
+  try {
+    const supabaseResponse = await syncSupabaseSessionFromBrowser();
+    if (supabaseResponse?.data?.access) {
+      return { response: supabaseResponse, refreshToken: null };
+    }
+  } catch (error) {
+    console.warn(
+      'Supabase session renewal failed:',
+      error instanceof Error ? error.message : 'Unknown error',
+    );
+  }
+
+  const refreshToken = getStoredDjangoRefreshToken();
+  if (!refreshToken) return null;
+  const response = await refreshDjangoSession(refreshToken);
+  return response?.data?.access ? { response, refreshToken } : null;
+}
+
 apiClient.interceptors.request.use(async (config) => {
   const headers = config.headers ?? {};
   let djangoToken = getStoredDjangoAccessToken();
@@ -64,10 +116,10 @@ apiClient.interceptors.request.use(async (config) => {
     && djangoToken
     && isExpiredDjangoAccessToken(djangoToken)
   ) {
-    const sessionResponse = await syncSupabaseSessionFromBrowser();
-    if (sessionResponse?.data?.access) {
-      djangoToken = sessionResponse.data.access;
-      setDjangoAuthToken(djangoToken);
+    const refreshedSession = await refreshLearningSession();
+    if (refreshedSession?.response.data?.access) {
+      djangoToken = refreshedSession.response.data.access;
+      setDjangoAuthToken(djangoToken, refreshedSession.refreshToken);
     } else {
       clearDjangoAuthToken();
       djangoToken = null;
@@ -128,11 +180,11 @@ apiClient.interceptors.response.use(
     if (status === 401 && original && !original._authRetry && !isSessionSyncRequest) {
       original._authRetry = true;
       try {
-        const sessionResponse = await syncSupabaseSessionFromBrowser();
-        if (sessionResponse?.data?.access) {
-          setDjangoAuthToken(sessionResponse.data.access);
+        const refreshedSession = await refreshLearningSession();
+        if (refreshedSession?.response.data?.access) {
+          setDjangoAuthToken(refreshedSession.response.data.access, refreshedSession.refreshToken);
           original.headers = original.headers ?? {};
-          original.headers.Authorization = createBearerAuthorization(sessionResponse.data.access);
+          original.headers.Authorization = createBearerAuthorization(refreshedSession.response.data.access);
           return apiClient(original);
         }
       } catch (syncError) {
@@ -209,19 +261,24 @@ export function syncSupabaseSessionWithRefresh(accessToken: string) {
 export const googleLogin = (id_token: string, role: 'student' | 'instructor' = 'student') =>
   apiClient.post('/auth/login/google/', { id_token, role }, { timeout: AUTH_REQUEST_TIMEOUT });
 
-export function setDjangoAuthToken(accessToken: string | null) {
+export function setDjangoAuthToken(accessToken: string | null, refreshToken: string | null = null) {
   clearCourseDetailRequests();
-  if (accessToken) {
-    try {
+  try {
+    if (accessToken) {
       localStorage.setItem('django_access', accessToken);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event(DJANGO_AUTH_TOKEN_UPDATED_EVENT));
-      }
-    } catch (e) {
-      /* ignore */
+    } else {
+      localStorage.removeItem('django_access');
     }
-  } else {
-    try { localStorage.removeItem('django_access'); } catch (e) { /* ignore */ }
+    if (refreshToken) {
+      localStorage.setItem('django_refresh', refreshToken);
+    } else {
+      localStorage.removeItem('django_refresh');
+    }
+  } catch (error) {
+    console.warn('Could not persist learning platform authentication tokens:', error);
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(DJANGO_AUTH_TOKEN_UPDATED_EVENT));
   }
 }
 
@@ -390,3 +447,65 @@ export const recordVisitorEvent = (path: string, session_key?: string) =>
   apiClient.post('/platform/visitor-events/', { path, session_key });
 export const getAnalyticsSummary = () => apiClient.get('/platform/analytics/summary/');
 export const getPlatformStats = () => apiClient.get('/platform/stats/');
+
+export type StartupProjectStage = 'idea' | 'validation' | 'mvp' | 'launch' | 'growth';
+export type StartupProjectStatus = 'active' | 'paused' | 'completed';
+export type StartupMilestoneStatus = 'not_started' | 'in_progress' | 'completed';
+
+export interface StartupMilestone {
+  id: number;
+  project: number;
+  title: string;
+  details: string;
+  due_date: string | null;
+  status: StartupMilestoneStatus;
+  order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StartupProject {
+  id: number;
+  owner: number;
+  title: string;
+  description: string;
+  industry: string;
+  stage: StartupProjectStage;
+  status: StartupProjectStatus;
+  problem: string;
+  solution: string;
+  target_market: string;
+  value_proposition: string;
+  business_model: string;
+  next_steps: string;
+  milestones: StartupMilestone[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type StartupProjectPayload = Omit<
+  StartupProject,
+  'id' | 'owner' | 'milestones' | 'created_at' | 'updated_at'
+>;
+
+export type StartupMilestonePayload = Pick<
+  StartupMilestone,
+  'project' | 'title' | 'details' | 'due_date' | 'status' | 'order'
+>;
+
+export const getStartupProjects = () =>
+  apiClient.get<StartupProject[]>('/platform/startup-projects/', { timeout: AUTH_REQUEST_TIMEOUT });
+export const createStartupProject = (payload: StartupProjectPayload) =>
+  apiClient.post<StartupProject>('/platform/startup-projects/', payload, { timeout: AUTH_REQUEST_TIMEOUT });
+export const updateStartupProject = (id: number, payload: StartupProjectPayload) =>
+  apiClient.patch<StartupProject>(`/platform/startup-projects/${id}/`, payload, { timeout: AUTH_REQUEST_TIMEOUT });
+export const createStartupMilestone = (payload: StartupMilestonePayload) =>
+  apiClient.post<StartupMilestone>('/platform/startup-milestones/', payload, { timeout: AUTH_REQUEST_TIMEOUT });
+export const updateStartupMilestone = (
+  id: number,
+  payload: Partial<Omit<StartupMilestonePayload, 'project'>>,
+) =>
+  apiClient.patch<StartupMilestone>(`/platform/startup-milestones/${id}/`, payload, { timeout: AUTH_REQUEST_TIMEOUT });
+
+export const getFeatureFlags = () =>
+  apiClient.get<Record<string, boolean>>('/feature-flags/', { timeout: AUTH_REQUEST_TIMEOUT });

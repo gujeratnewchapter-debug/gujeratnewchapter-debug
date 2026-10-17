@@ -7,12 +7,14 @@ import { BrainCircuit, CheckCircle2, Plus, Sparkles, Trash2 } from 'lucide-react
 import { useAuth } from '@/lib/auth-context';
 import { deleteCourse, getCourse, getCourses, getEnrollmentProgress, getInstructorAnalytics, getMyEnrollments } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useFeatureFlag } from '@/lib/featureFlags';
 import { InnovationLoader } from '@/components/InnovationLoader';
 import { getResumeLessonPath } from '@/lib/course-navigation';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
   const { t } = useI18n();
+  const startupToolsEnabled = useFeatureFlag('startup_tools', isBackendAuthenticated);
   const router = useRouter();
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [myCourses, setMyCourses] = useState<any[]>([]);
@@ -70,7 +72,7 @@ export default function DashboardPage() {
       router.push(lessonPath ?? '/profile#certificates');
     } catch (error) {
       console.error('Failed to resume the enrolled course:', error);
-      setResumeError('We could not load your saved lesson. Please try again.');
+      setResumeError(t('savedLessonError'));
     } finally {
       setResumingEnrollmentId(null);
     }
@@ -86,39 +88,40 @@ export default function DashboardPage() {
     [enrollments],
   );
 
-  if (isLoading || !isBackendAuthenticated) return <div className="container section"><InnovationLoader label="Loading dashboard" /></div>;
+  if (isLoading || !isBackendAuthenticated) return <div className="container section"><InnovationLoader label={t('loadingDashboard')} /></div>;
 
   return (
     <div className="container section">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginBottom: 32 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h1 style={{ fontSize: 28, marginBottom: 6 }}>Welcome back, {user?.first_name || user?.username}</h1>
+            <h1 style={{ fontSize: 28, marginBottom: 6 }}>{t('welcomeBack')}, {user?.first_name || user?.username}</h1>
             <p style={{ color: 'var(--text-muted)', margin: 0 }}>{t('yourProgress')}</p>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={() => router.push('/courses')}>Browse courses</button>
-            <button className="btn" onClick={() => router.push('/ai-tutor')}>Open AI Tutor</button>
+            <button className="btn btn-primary" onClick={() => router.push('/courses')}>{t('browseCourses')}</button>
+            <button className="btn" onClick={() => router.push('/ai-tutor')}>{t('openAiTutor')}</button>
+            {startupToolsEnabled && <button className="btn" onClick={() => router.push('/startup-workspace')}>{t('startupWorkspace')}</button>}
             <button className="btn" onClick={() => router.push('/profile')}>{t('profile')}</button>
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           <div className="card">
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Enrolled courses</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('enrolledCourses')}</p>
             <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{enrollments.length}</p>
           </div>
           <div className="card">
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Avg. progress</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('averageProgress')}</p>
             <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{Math.round(avgProgress)}%</p>
           </div>
           <div className="card">
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Completed</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('completed')}</p>
             <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{completedCourses}</p>
           </div>
           <div className="card">
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Your role</p>
-            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{user?.role ?? 'Student'}</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('yourRole')}</p>
+            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{user?.role === 'instructor' ? t('instructor') : user?.role === 'super_admin' ? t('admin') : t('student')}</p>
           </div>
         </div>
       </div>
@@ -126,10 +129,10 @@ export default function DashboardPage() {
       <div className="card" style={{ padding: 20, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <BrainCircuit size={18} color="var(--brand)" />
-          <h2 style={{ fontSize: 18, margin: 0 }}>AI learning companion</h2>
+          <h2 style={{ fontSize: 18, margin: 0 }}>{t('aiLearningCompanion')}</h2>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <button className="btn btn-primary" onClick={() => router.push('/ai-tutor')}>Ask the AI Tutor</button>
+          <button className="btn btn-primary" onClick={() => router.push('/ai-tutor')}>{t('askAiTutor')}</button>
           <button
             className="btn"
             onClick={() => {
@@ -138,9 +141,9 @@ export default function DashboardPage() {
               else router.push('/courses');
             }}
           >
-            Continue learning
+            {t('continueLearning')}
           </button>
-          <button className="btn" onClick={() => router.push('/profile')}>View profile</button>
+          <button className="btn" onClick={() => router.push('/profile')}>{t('viewProfile')}</button>
         </div>
       </div>
 
@@ -154,21 +157,21 @@ export default function DashboardPage() {
             <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden', margin: '8px 0' }}>
               <div style={{ width: `${e.progress_percent}%`, height: '100%', background: 'var(--brand)' }} />
             </div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.progress_percent}% complete</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.progress_percent}% {t('complete')}</p>
             <button
               className="btn btn-primary"
               onClick={() => void handleResumeCourse(e)}
               disabled={resumingEnrollmentId === e.id}
             >
-              {resumingEnrollmentId === e.id ? 'Opening saved lesson...' : (e.progress_percent ?? 0) >= 100 ? 'View certificate' : 'Continue course'}
+              {resumingEnrollmentId === e.id ? t('openingSavedLesson') : (e.progress_percent ?? 0) >= 100 ? t('viewCertificate') : t('continueCourse')}
             </button>
           </div>
         ))}
         {resumeError && <p role="alert" style={{ color: 'var(--danger)' }}>{resumeError}</p>}
         {enrollments.length === 0 && (
           <div className="card">
-            <p style={{ color: 'var(--text-muted)' }}>You haven&apos;t enrolled in a course yet.</p>
-            <Link href="/courses" className="btn btn-primary" style={{ marginTop: 12, display: 'inline-flex' }}>Browse Courses</Link>
+            <p style={{ color: 'var(--text-muted)' }}>{t('noEnrollments')}</p>
+            <Link href="/courses" className="btn btn-primary" style={{ marginTop: 12, display: 'inline-flex' }}>{t('browseCourses')}</Link>
           </div>
         )}
       </div>
@@ -176,19 +179,19 @@ export default function DashboardPage() {
       {(user?.role === 'instructor' || user?.role === 'super_admin') && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h2 style={{ fontSize: 20 }}>{user?.role === 'super_admin' ? 'All Courses' : 'Your Courses'}</h2>
+            <h2 style={{ fontSize: 20 }}>{user?.role === 'super_admin' ? t('allCourses') : t('yourCourses')}</h2>
             <button className="btn btn-primary" onClick={() => router.push('/instructor/courses/new')}>
-              <Plus size={15} /> New Course
+              <Plus size={15} /> {t('newCourse')}
             </button>
           </div>
           {user?.role === 'instructor' && instructorAnalytics && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 18 }}>
                 {[
-                  ['Registered students', instructorAnalytics.totals.registered_students],
-                  ['Currently attending', instructorAnalytics.totals.attending_students],
-                  ['Completed courses', instructorAnalytics.totals.completed_students],
-                  ['Certificates issued', instructorAnalytics.totals.certificates_issued],
+                  [t('registeredStudents'), instructorAnalytics.totals.registered_students],
+                  [t('currentlyAttending'), instructorAnalytics.totals.attending_students],
+                  [t('completedCourses'), instructorAnalytics.totals.completed_students],
+                  [t('certificatesIssued'), instructorAnalytics.totals.certificates_issued],
                 ].map(([label, value]) => (
                   <div className="card" key={String(label)}>
                     <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{label}</p>
@@ -198,7 +201,7 @@ export default function DashboardPage() {
               </div>
               <div className="card" style={{ marginBottom: 18, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-                  <thead><tr>{['Course', 'Registered', 'Attending', 'Completed', 'Certificates', 'Avg. progress', 'Status'].map((heading) => <th key={heading} style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid var(--border)', fontSize: 12 }}>{heading}</th>)}</tr></thead>
+                  <thead><tr>{[t('course'), t('registered'), t('attending'), t('completed'), t('certificates'), t('averageProgress'), t('status')].map((heading) => <th key={heading} style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid var(--border)', fontSize: 12 }}>{heading}</th>)}</tr></thead>
                   <tbody>{instructorAnalytics.courses.map((item: any) => <tr key={item.course_id}>
                     <td style={{ padding: '10px 8px', fontWeight: 600 }}>{item.title}</td>
                     <td style={{ padding: '10px 8px' }}>{item.registered_students}</td>
@@ -219,7 +222,7 @@ export default function DashboardPage() {
                   <p style={{ fontWeight: 600 }}>{c.title}</p>
                   <span className="badge" style={{ marginTop: 8, display: 'inline-block' }}>{c.status}</span>
                 </Link>
-                {user?.role === 'instructor' && <button type="button" className="btn" onClick={() => handleDeleteCourse(c)} style={{ marginTop: 14, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Trash2 size={14} /> Delete course</button>}
+                {user?.role === 'instructor' && <button type="button" className="btn" onClick={() => handleDeleteCourse(c)} style={{ marginTop: 14, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Trash2 size={14} /> {t('deleteCourse')}</button>}
               </div>
             ))}
           </div>

@@ -2,18 +2,44 @@
 AI Tutor / Startup Mentor / Business Coach service layer.
 
 Calls the OpenAI API and grounds answers in the approved knowledge base
-(RFP section 10). The retrieval step here is a simple keyword-overlap
-search over `KnowledgeDocument.raw_text` — a placeholder for a real
-vector database (pgvector / Chroma / Pinecone via LangChain/LlamaIndex,
-per RFP section 3 AI stack). Swap `retrieve_context()` for a real
-embedding-similarity search when a vector store is wired up.
+(RFP section 10). Retrieval uses BM25-style lexical ranking over indexed
+knowledge documents. A vector store can replace this implementation later
+without changing the chat API or citation format.
 """
+import math
+import re
+from collections import Counter
+
 from django.conf import settings
 from .models import KnowledgeDocument
 
 
 class AIServiceUnavailable(Exception):
     """Raised when the configured AI provider cannot produce a reply."""
+
+
+RETRIEVAL_STOP_WORDS = frozenset({
+    'a', 'about', 'after', 'all', 'also', 'am', 'an', 'and', 'any', 'are', 'as',
+    'at', 'be', 'because', 'been', 'before', 'being', 'between', 'both', 'but',
+    'by', 'can', 'could', 'did', 'do', 'does', 'doing', 'down', 'during', 'each',
+    'few', 'for', 'from', 'further', 'had', 'has', 'have', 'having', 'he', 'her',
+    'here', 'hers', 'him', 'his', 'how', 'i', 'if', 'in', 'into', 'is', 'it',
+    'its', 'just', 'me', 'more', 'most', 'my', 'no', 'nor', 'not', 'of', 'off',
+    'on', 'once', 'only', 'or', 'other', 'our', 'out', 'over', 'own', 'same',
+    'she', 'should', 'so', 'some', 'such', 'than', 'that', 'the', 'their',
+    'them', 'then', 'there', 'these', 'they', 'this', 'those', 'through', 'to',
+    'too', 'under', 'until', 'up', 'very', 'was', 'we', 'were', 'what', 'when',
+    'where', 'which', 'while', 'who', 'why', 'will', 'with', 'would', 'you',
+    'your',
+})
+
+
+def _retrieval_tokens(text):
+    return [
+        token
+        for token in re.findall(r'\w+', text.casefold())
+        if len(token) > 1 and token not in RETRIEVAL_STOP_WORDS
+    ]
 
 
 SYSTEM_PROMPTS = {
@@ -57,19 +83,59 @@ RESPONSE_FORMAT_RULES = (
 
 
 def retrieve_context(query, course=None, top_k=3):
-    """Naive keyword-overlap retrieval over indexed knowledge documents."""
+    """Rank indexed documents using BM25-style lexical relevance."""
+    query_tokens = set(_retrieval_tokens(query))
+    if not query_tokens or top_k <= 0:
+        return '', []
+
     docs = KnowledgeDocument.objects.filter(is_indexed=True)
     if course:
         docs = docs.filter(course=course)
 
-    query_words = set(query.lower().split())
-    scored = []
+    documents = []
     for doc in docs:
-        text_words = set(doc.raw_text.lower().split())
-        overlap = len(query_words & text_words)
-        if overlap > 0:
-            scored.append((overlap, doc))
-    scored.sort(key=lambda x: x[0], reverse=True)
+        body_tokens = _retrieval_tokens(doc.raw_text)
+        if not body_tokens:
+            continue
+        title_tokens = Counter(_retrieval_tokens(doc.title))
+        documents.append((doc, Counter(body_tokens), title_tokens, len(body_tokens)))
+
+    if not documents:
+        return '', []
+
+    document_count = len(documents)
+    average_length = sum(item[3] for item in documents) / document_count
+    document_frequency = Counter()
+    for _, term_counts, _, _ in documents:
+        document_frequency.update(term_counts.keys())
+
+    scored = []
+    for doc, term_counts, title_counts, document_length in documents:
+        score = 0.0
+        for term in query_tokens:
+            frequency = term_counts[term]
+            title_frequency = title_counts[term]
+            if not frequency and not title_frequency:
+                continue
+
+            inverse_frequency = math.log(
+                1 + (document_count - document_frequency[term] + 0.5)
+                / (document_frequency[term] + 0.5)
+            )
+            if frequency:
+                length_normalizer = (
+                    frequency + 1.5 * (
+                        1 - 0.75 + 0.75 * document_length / average_length
+                    )
+                )
+                score += inverse_frequency * frequency * 2.5 / length_normalizer
+            if title_frequency:
+                score += inverse_frequency * min(title_frequency, 2) * 1.5
+
+        if score > 0:
+            scored.append((score, doc))
+
+    scored.sort(key=lambda item: (-item[0], item[1].id))
     top_docs = [doc for _, doc in scored[:top_k]]
 
     context_text = "\n\n".join(f"[Source: {d.title}]\n{d.raw_text[:1500]}" for d in top_docs)

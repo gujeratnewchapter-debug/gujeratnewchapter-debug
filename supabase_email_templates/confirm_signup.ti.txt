@@ -1,0 +1,16 @@
+DRAFT - NEEDS NATIVE REVIEW - DO NOT SEND
+
+{{ if .Data.full_name }}{{ .Data.full_name }}{{ else }}ተማሃራይ{{ end }} ሰላም፣
+
+ናብ Ethiopian Startup School ብደሓን ምጻእ! ተማሃራይ ንምዃን እቲ ቀዳማይ ስጉምቲ ስለ ዝወሰድካ እንቋዕ ሓጎሰካ። ኣካውንትካ ንምንቃሕ ኢመይልካ ኣረጋግጽ፦
+{{ .ConfirmationURL }}
+
+ምስ ኣረጋገጽካ፣ ብነጻ ኮርሳት ክትምዝገብ፣ ምስ AI ሓገዝቲ ክትመሃር፣ ኣብ ነፍሲ ወከፍ ፈተና 80% ብምርካብ ናብ ዝቕጽል ትምህርቲ ክትሰግርን QR ዝተረጋገጸ ምስክር ወረቐት ክትረክብን ትኽእል።
+
+ነዚ ኣካውንት እንተዘይፈጢርካዮ፣ ነዚ ኢመይል ክትርስዖ ትኽእል።
+
+ብሰላምታ፣
+ጉጅለ Ethiopian Startup School
+ኣዲስ ኣበባ፣ ኢትዮጵያ
+{{ .SiteURL }}
+{{ .Email }}

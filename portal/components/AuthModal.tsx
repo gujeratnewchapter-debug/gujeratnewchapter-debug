@@ -127,7 +127,7 @@ export function AuthModal({
     setError('');
     setSuccess('');
     if (signupDisabledUntil && Date.now() < signupDisabledUntil) {
-      setError('Signups are temporarily disabled due to rate limiting. Please try again later.');
+      setError(t('signupRateLimited'));
       return;
     }
     setLoading(true);
@@ -146,14 +146,14 @@ export function AuthModal({
         return;
       }
 
-      setSuccess('Account created. Please check your email to verify your account before signing in.');
+      setSuccess(t('accountCreatedCheckEmail'));
       setSignInForm({ email: '', password: '' });
       setSignUpForm({ full_name: '', email: '', password: '', confirm_password: '' });
       setTab('signin');
       if (returnTo) {
         setTimeout(() => {
           setError('');
-          setSuccess('Your account is ready. Please sign in to continue your lesson.');
+          setSuccess(t('accountReadyToContinue'));
         }, 50);
       }
     } catch (err: any) {
@@ -205,7 +205,7 @@ export function AuthModal({
   async function handleForgotPassword() {
     const email = forgotPasswordEmail.trim();
     if (!email) {
-      setError('Please enter your email address.');
+      setError(t('enterEmailFirst'));
       return;
     }
     setError('');
@@ -216,7 +216,7 @@ export function AuthModal({
         redirectTo: getAuthRedirectUrl('/reset-password'),
       });
       if (error) throw error;
-      setSuccess('A password reset email has been sent. Please check your inbox.');
+      setSuccess(t('passwordResetSent'));
     } catch (err: any) {
       setError(err?.message || 'Unable to send password reset email.');
     } finally {
@@ -228,7 +228,7 @@ export function AuthModal({
   async function handleResendConfirmation() {
     const email = signInForm.email.trim();
     if (!email) {
-      setError('Enter your email address first.');
+      setError(t('enterEmailFirst'));
       return;
     }
 
@@ -242,7 +242,7 @@ export function AuthModal({
         options: { emailRedirectTo: getAuthRedirectUrl('/auth/callback') },
       });
       if (error) throw error;
-      setSuccess('If an unverified account exists for that email, a new verification link has been sent.');
+      setSuccess(t('verificationResendResult'));
     } catch (err: any) {
       setError(err?.message || 'Unable to resend the verification email. Please try again later.');
     } finally {
@@ -257,7 +257,7 @@ export function AuthModal({
     >
       <div ref={modalRef} onClick={(e) => e.stopPropagation()} className="card auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" style={{ width: 440, maxWidth: '100%', position: 'relative', zIndex: 200001 }}>
         <h2 id="auth-modal-title" className="sr-only">{tab === 'signin' ? t('signIn') : t('signUp')}</h2>
-        <button type="button" onClick={handleClose} aria-label="Close sign-in dialog" style={{ position: 'absolute', top: 14, right: 14, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+        <button type="button" onClick={handleClose} aria-label={t('closeDialog')} style={{ position: 'absolute', top: 14, right: 14, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
           <X size={18} />
         </button>
 
@@ -285,9 +285,9 @@ export function AuthModal({
             onClick={handleGoogleSignIn}
             disabled={loading}
             style={{ flex: 1 }}
-            title="Continue with Google through Supabase"
+            title={t('continueWithGoogle')}
           >
-            Continue with Google
+            {t('continueWithGoogle')}
           </button>
           <button
             type="button"
@@ -295,48 +295,48 @@ export function AuthModal({
             onClick={handleGitHubSignIn}
             disabled={loading}
             style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-            title="Sign in with GitHub"
+            title={t('continueWithGithub')}
           >
             <Github size={16} />
-            GitHub
+            {t('continueWithGithub')}
           </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0', color: 'var(--text-muted)', fontSize: 12 }}>
           <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          or continue with email
+          {t('continueWithEmail')}
           <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
         </div>
 
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
         {tab === 'signin' && /email not confirmed|resend the verification email/i.test(error) && (
           <button className="btn" type="button" onClick={handleResendConfirmation} disabled={loading} style={{ marginBottom: 10 }}>
-            {loading ? 'Sending...' : 'Resend verification email'}
+            {loading ? t('sending') : t('resendVerification')}
           </button>
         )}
         {success && <p style={{ color: 'var(--brand)', fontSize: 13, marginBottom: 10 }}>{success}</p>}
 
         {tab === 'signin' ? (
           <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <input className="input" type="email" placeholder="Email" value={signInForm.email} onChange={(e) => setSignInForm((f) => ({ ...f, email: e.target.value }))} required suppressHydrationWarning />
+            <input className="input" type="email" placeholder={t('email')} value={signInForm.email} onChange={(e) => setSignInForm((f) => ({ ...f, email: e.target.value }))} required suppressHydrationWarning />
             <div style={{ position: 'relative' }}>
-              <input className="input" type={showPassword ? 'text' : 'password'} placeholder="Password" value={signInForm.password} onChange={(e) => setSignInForm((f) => ({ ...f, password: e.target.value }))} required suppressHydrationWarning />
-              <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <input className="input" type={showPassword ? 'text' : 'password'} placeholder={t('password')} value={signInForm.password} onChange={(e) => setSignInForm((f) => ({ ...f, password: e.target.value }))} required suppressHydrationWarning />
+              <button type="button" aria-label={showPassword ? t('hidePassword') : t('showPassword')} onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
             <button className="btn btn-primary" disabled={loading} type="submit">{t('signIn')}</button>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <button type="button" onClick={() => setTab('signup')} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer', padding: 0, fontWeight: 600 }}>
-                Create account
+                {t('createAccount')}
               </button>
               <button type="button" onClick={handleForgotPassword} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}>
-                Forgot password?
+                {t('forgotPassword')}
               </button>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input className="input" type="email" placeholder="Enter your email to reset password" value={forgotPasswordEmail} onChange={(e) => setForgotPasswordEmail(e.target.value)} suppressHydrationWarning />
-              <button type="button" className="btn btn-accent" onClick={handleForgotPassword} disabled={loading}>Send</button>
+              <input className="input" type="email" placeholder={t('enterEmailToReset')} value={forgotPasswordEmail} onChange={(e) => setForgotPasswordEmail(e.target.value)} suppressHydrationWarning />
+              <button type="button" className="btn btn-accent" onClick={handleForgotPassword} disabled={loading}>{t('send')}</button>
             </div>
           </form>
         ) : (
@@ -350,32 +350,32 @@ export function AuthModal({
                   className="btn"
                   style={{ flex: 1, background: role === r ? 'var(--brand)' : 'var(--surface-2)', color: role === r ? '#fff' : 'var(--text)' }}
                 >
-                  {r === 'student' ? 'Student' : 'Instructor'}
+                  {r === 'student' ? t('student') : t('instructor')}
                 </button>
               ))}
             </div>
-            <input className="input" placeholder="Full name" value={signUpForm.full_name} onChange={(e) => setSignUpForm((f) => ({ ...f, full_name: e.target.value }))} required suppressHydrationWarning />
-            <input className="input" type="email" placeholder="Email" value={signUpForm.email} onChange={(e) => setSignUpForm((f) => ({ ...f, email: e.target.value }))} required suppressHydrationWarning />
+            <input className="input" placeholder={t('fullName')} value={signUpForm.full_name} onChange={(e) => setSignUpForm((f) => ({ ...f, full_name: e.target.value }))} required suppressHydrationWarning />
+            <input className="input" type="email" placeholder={t('email')} value={signUpForm.email} onChange={(e) => setSignUpForm((f) => ({ ...f, email: e.target.value }))} required suppressHydrationWarning />
             <div style={{ position: 'relative' }}>
-              <input className="input" type={showPassword ? 'text' : 'password'} placeholder="Password" value={signUpForm.password} onChange={(e) => setSignUpForm((f) => ({ ...f, password: e.target.value }))} required suppressHydrationWarning />
-              <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <input className="input" type={showPassword ? 'text' : 'password'} placeholder={t('password')} value={signUpForm.password} onChange={(e) => setSignUpForm((f) => ({ ...f, password: e.target.value }))} required suppressHydrationWarning />
+              <button type="button" aria-label={showPassword ? t('hidePassword') : t('showPassword')} onClick={() => setShowPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
             <div style={{ position: 'relative' }}>
-              <input className="input" type={showConfirmPassword ? 'text' : 'password'} placeholder="Confirm password" value={signUpForm.confirm_password} onChange={(e) => setSignUpForm((f) => ({ ...f, confirm_password: e.target.value }))} required suppressHydrationWarning />
-              <button type="button" aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'} onClick={() => setShowConfirmPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <input className="input" type={showConfirmPassword ? 'text' : 'password'} placeholder={t('confirmPassword')} value={signUpForm.confirm_password} onChange={(e) => setSignUpForm((f) => ({ ...f, confirm_password: e.target.value }))} required suppressHydrationWarning />
+              <button type="button" aria-label={showConfirmPassword ? t('hidePassword') : t('showPassword')} onClick={() => setShowConfirmPassword((v) => !v)} style={{ position: 'absolute', right: 8, top: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
             <button className="btn btn-primary" disabled={loading || !!(signupDisabledUntil && Date.now() < signupDisabledUntil)} type="submit">{t('signUp')}</button>
             {signupDisabledUntil && Date.now() < signupDisabledUntil && (
               <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
-                Signups are temporarily disabled due to rate limiting. Try again in {Math.ceil((signupDisabledUntil - Date.now()) / 1000)}s.
+                {t('signupRateLimited')} {Math.ceil((signupDisabledUntil - Date.now()) / 1000)}s.
               </p>
             )}
             <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-              You will need to verify your email before signing in.
+              {t('verifyEmailBeforeSignIn')}
             </p>
           </form>
         )}

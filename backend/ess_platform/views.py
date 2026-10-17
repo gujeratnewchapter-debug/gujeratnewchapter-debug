@@ -1,10 +1,17 @@
 from django.db.models import Count
 from django.db.models.functions import TruncMonth
-from rest_framework import permissions, status, viewsets
+from feature_flags.permissions import requires_flag
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from .models import ServiceRequest, VisitorEvent, PlatformStat
-from .serializers import ServiceRequestSerializer, VisitorEventSerializer, PlatformStatSerializer
+from .models import ServiceRequest, StartupMilestone, StartupProject, VisitorEvent, PlatformStat
+from .serializers import (
+    ServiceRequestSerializer,
+    StartupMilestoneSerializer,
+    StartupProjectSerializer,
+    VisitorEventSerializer,
+    PlatformStatSerializer,
+)
 
 
 class ServiceRequestViewSet(viewsets.ModelViewSet):
@@ -30,6 +37,37 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
             )
         else:
             serializer.save()
+
+
+class StartupProjectViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = StartupProjectSerializer
+    permission_classes = [permissions.IsAuthenticated, requires_flag('startup_tools')]
+
+    def get_queryset(self):
+        return StartupProject.objects.filter(owner=self.request.user).prefetch_related('milestones')
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class StartupMilestoneViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = StartupMilestoneSerializer
+    permission_classes = [permissions.IsAuthenticated, requires_flag('startup_tools')]
+
+    def get_queryset(self):
+        return StartupMilestone.objects.filter(project__owner=self.request.user).select_related('project')
 
 
 @api_view(['POST'])

@@ -36,6 +36,11 @@ const STEPS = [
   { title: 'Learn with AI at every step', desc: 'Watch, read, and ask your AI Tutor questions the moment something didn\u2019t click.' },
   { title: 'Pass to unlock, then get certified', desc: 'Clear each lesson\u2019s quiz to move forward, and earn a QR-verified certificate on completion.' },
 ];
+const SIGN_IN_PROCESS_STEPS = [
+  { title: 'Create your account', desc: 'Sign up with your email, or continue with Google or GitHub.' },
+  { title: 'Verify your email', desc: 'If you signed up with email, open the verification link we send before signing in.' },
+  { title: 'Sign in and start learning', desc: 'Choose a course and continue learning with your AI Tutor.' },
+];
 export default function HomePage() {
   const { t, lang } = useI18n();
   const { isAuthenticated } = useAuth();
@@ -106,6 +111,9 @@ export default function HomePage() {
   });
   const configuredSteps = homeItems('how-it-works');
   const steps = (configuredSteps.length ? configuredSteps : STEPS).map((item: any, index: number) => Array.isArray(item) ? { title: item[0], desc: item[1] } : item || STEPS[index]);
+  const configuredSignInProcess = homeItems('sign-in-process');
+  const signInProcess = (configuredSignInProcess.length ? configuredSignInProcess : SIGN_IN_PROCESS_STEPS)
+    .map((item: any) => Array.isArray(item) ? { title: item[0], desc: item[1] } : item);
 
   return (
     <div className="homepage-shell">
@@ -191,6 +199,23 @@ export default function HomePage() {
               <div>
                 <p style={{ fontWeight: 600, margin: '0 0 4px', fontSize: 16 }}>{s.title}</p>
                 <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14, lineHeight: 1.5 }}>{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="container section home-steps-section">
+        <h2 className="home-section-title" style={{ fontSize: 26, marginBottom: 28, textAlign: 'center' }}>
+          {homeSections.find((item: any) => item.key === 'sign-in-process')?.title || 'Sign-In Process'}
+        </h2>
+        <div className="home-steps-list" style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 560, margin: '0 auto' }}>
+          {signInProcess.map((item: any, index: number) => (
+            <div key={item.title || index} className="step-item">
+              <span className="step-num">{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <p style={{ fontWeight: 600, margin: '0 0 4px', fontSize: 16 }}>{item.title}</p>
+                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14, lineHeight: 1.5 }}>{item.desc}</p>
               </div>
             </div>
           ))}

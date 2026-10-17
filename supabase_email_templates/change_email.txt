@@ -1,0 +1,11 @@
+{{ if .Data.full_name }}Dear {{ .Data.full_name }},{{ else }}Dear Learner,{{ end }}
+
+A request was made to change the email address on your Ethiopian Startup School account. Confirm the change using this secure link:
+{{ .ConfirmationURL }}
+
+If you did not request this change, contact our team through {{ .SiteURL }}.
+
+Warm regards,
+The Ethiopian Startup School Team
+Addis Ababa, Ethiopia
+Sent to: {{ .Email }}

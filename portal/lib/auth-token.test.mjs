@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isExpiredDjangoAccessToken, isUsableJwtToken } from './auth-token.ts';
+import {
+  getStoredDjangoRefreshToken,
+  isExpiredDjangoAccessToken,
+  isUsableJwtToken,
+} from './auth-token.ts';
 
 function createToken(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
@@ -52,4 +56,32 @@ test('does not classify malformed, Supabase, or non-access tokens as expired Dja
     token_type: 'access',
     user_id: 1,
   })), false);
+});
+
+test('reads the stored Django refresh token for access-token renewal', () => {
+  const previousStorage = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (key) => key === 'django_refresh' ? 'refresh-token' : null,
+  };
+
+  try {
+    assert.equal(getStoredDjangoRefreshToken(), 'refresh-token');
+  } finally {
+    if (previousStorage === undefined) {
+      delete globalThis.localStorage;
+    } else {
+      globalThis.localStorage = previousStorage;
+    }
+  }
+});
+
+test('returns no Django refresh token when browser storage is unavailable', () => {
+  const previousStorage = globalThis.localStorage;
+  delete globalThis.localStorage;
+
+  try {
+    assert.equal(getStoredDjangoRefreshToken(), null);
+  } finally {
+    if (previousStorage !== undefined) globalThis.localStorage = previousStorage;
+  }
 });

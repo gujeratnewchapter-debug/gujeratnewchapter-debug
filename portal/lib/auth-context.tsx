@@ -219,8 +219,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Keep legacy Django accounts usable when Supabase has no session.
             const backendRes = await api.login(normalizedEmail, password);
             const backendToken = backendRes?.data?.access;
-            if (!backendToken) throw new Error('No access token returned from backend login');
-            setDjangoAuthToken(backendToken);
+            const backendRefreshToken = backendRes?.data?.refresh;
+            if (!backendToken || !backendRefreshToken) {
+              throw new Error('Backend login did not return a complete token pair.');
+            }
+            setDjangoAuthToken(backendToken, backendRefreshToken);
             const { data: profile } = await api.getMe();
             setUser(profile as User);
             setTokenRefresh(prev => prev + 1);

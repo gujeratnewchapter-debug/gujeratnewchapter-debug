@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Lightbulb, ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { useFeatureFlag } from '@/lib/featureFlags';
 import { useI18n, LANGUAGES } from '@/lib/i18n';
 import { normalizePublicEnvironmentValue } from '@/lib/http-headers';
 import { AuthModal } from './AuthModal';
 
 export function Navbar() {
   const { user, isAuthenticated, signOut } = useAuth();
+  const startupToolsEnabled = useFeatureFlag('startup_tools', isAuthenticated);
   const { lang, setLang, t } = useI18n();
   const [langOpen, setLangOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -127,6 +129,15 @@ export function Navbar() {
                     >
                       {t('profile')}
                     </Link>
+                    {startupToolsEnabled && (
+                      <Link
+                        href="/startup-workspace"
+                        className="menu-link"
+                        onClick={() => { setProfileOpen(false); }}
+                      >
+                        {t('startupWorkspace')}
+                      </Link>
+                    )}
                     <button 
                       type="button" 
                       className="menu-link" 
@@ -147,7 +158,7 @@ export function Navbar() {
               <button className="btn btn-primary" type="button" onClick={() => setAuthOpen(true)}>{t('signIn')}</button>
             )}
 
-            <button className="mobile-menu-button" type="button" onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle navigation">
+            <button className="mobile-menu-button" type="button" onClick={() => setMenuOpen((o) => !o)} aria-label={t('toggleNavigation')}>
               {menuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
           </div>
@@ -169,6 +180,7 @@ export function Navbar() {
               {isAuthenticated ? (
                 <>
                   <Link href="/dashboard" onClick={() => setMenuOpen(false)}>{t('dashboard')}</Link>
+                  {startupToolsEnabled && <Link href="/startup-workspace" onClick={() => setMenuOpen(false)}>{t('startupWorkspace')}</Link>}
                   <Link href="/profile" onClick={() => setMenuOpen(false)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <span className="avatar" style={{ width: 28, height: 28, fontSize: 12 }}>
                       {profileAvatar ? <img src={profileAvatar} alt="Profile" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : profileInitial}

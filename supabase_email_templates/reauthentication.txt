@@ -1,0 +1,12 @@
+{{ if .Data.full_name }}Dear {{ .Data.full_name }},{{ else }}Dear Learner,{{ end }}
+
+Enter this verification code in Ethiopian Startup School to confirm your identity:
+{{ .Token }}
+
+If you did not request this code, you can safely ignore this email.
+
+Warm regards,
+The Ethiopian Startup School Team
+Addis Ababa, Ethiopia
+{{ .SiteURL }}
+Sent to: {{ .Email }}

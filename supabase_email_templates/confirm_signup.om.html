@@ -1,0 +1,23 @@
+<!-- DRAFT — needs native review before use. -->
+<!doctype html>
+<html lang="om">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Imeelii kee mirkaneessi</title></head>
+  <body style="margin:0;padding:24px;background:#f3f6f8;font-family:Arial,Helvetica,sans-serif;color:#172b4d;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr><td style="padding:22px 30px;background:#102a43;color:#ffffff;font-size:20px;font-weight:bold;">Ethiopian Startup School</td></tr>
+        <tr><td style="padding:30px;">
+          <p>{{ if .Data.full_name }}{{ .Data.full_name }}{{ else }}Barataa{{ end }} nagaa,</p>
+          <h1 style="font-size:22px;color:#102a43;">Baga gara Ethiopian Startup School dhuftan!</h1>
+          <p style="line-height:1.7;">Barataa ta'uuf tarkaanfii jalqabaa fudhattaniif baga gammaddan. Akkaawuntii keessan hojii irra oolchuuf imeelii keessan mirkaneessaa.</p>
+          <p style="margin:24px 0;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:13px 22px;border-radius:6px;background:#087e8b;color:#ffffff;text-decoration:none;font-weight:bold;">Imeelii koo mirkaneessi</a></p>
+          <p style="line-height:1.7;">Erga mirkanaa'ee booda koorsoota bilisaa galmaa'uu, gargaartota AI waliin barachuu, qormaata tokkoon tokkoon irratti 80% argachuun gara barnoota itti aanuutti ce'uu, akkasumas ragaa QR'n mirkanaa'e argachuu dandeessu.</p>
+          <p style="line-height:1.7;">Yoo butoonichi hin hojjenne, hidhaa kana biraawzari keessanitti maxxansaa:<br><a href="{{ .ConfirmationURL }}" style="color:#087e8b;overflow-wrap:anywhere;">{{ .ConfirmationURL }}</a></p>
+          <p style="line-height:1.7;">Yoo akkaawuntii kana hin uumne ta'e, imeelii kana dhiisuu dandeessu.</p>
+          <p style="line-height:1.7;">Kabajaan,<br>Garee Ethiopian Startup School</p>
+        </td></tr>
+        <tr><td style="padding:16px 30px;background:#eef3f6;color:#526579;font-size:12px;">Finfinnee, Itoophiyaa · <a href="{{ .SiteURL }}" style="color:#087e8b;">{{ .SiteURL }}</a> · {{ .Email }}</td></tr>
+      </table>
+    </td></tr></table>
+  </body>
+</html>

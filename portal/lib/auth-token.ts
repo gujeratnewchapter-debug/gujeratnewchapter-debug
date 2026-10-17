@@ -68,3 +68,11 @@ export function getStoredDjangoAccessToken(): string | null {
     return null;
   }
 }
+
+export function getStoredDjangoRefreshToken(): string | null {
+  try {
+    return localStorage.getItem('django_refresh') || null;
+  } catch {
+    return null;
+  }
+}

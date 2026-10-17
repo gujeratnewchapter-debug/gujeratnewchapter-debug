@@ -48,6 +48,7 @@ urlpatterns = [
     path('api/', include('news.urls')),
     path('api/', include('site_settings.urls')),
     path('api/platform/', include('ess_platform.urls')),
+    path('api/', include('feature_flags.urls')),
 ]
 
 # Local development serves filesystem media. Production returns Supabase
