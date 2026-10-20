@@ -572,6 +572,7 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
   }
 
   async function saveCourse(publish = false) {
+    const isUnpublishing = !publish && course.status === 'published';
     setStatus('saving');
     setMessage('');
     try {
@@ -587,7 +588,7 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
         tags: course.tags,
         category: course.category || null,
         level: course.level,
-        status: publish ? 'published' : course.status,
+        status: publish ? 'published' : 'draft',
         language: course.language,
         duration_hours: Number(course.duration_hours || 1),
         price: Number(course.price || 0),
@@ -708,8 +709,15 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
         }
       }
 
+      setCourse((previous) => ({ ...previous, status: publish ? 'published' : 'draft' }));
       setStatus('saved');
-      setMessage(publish ? 'Course published successfully.' : 'Course saved as draft.');
+      setMessage(
+        publish
+          ? 'Course published successfully.'
+          : isUnpublishing
+            ? 'Course unpublished successfully.'
+            : 'Course saved as draft.',
+      );
       if (publish) {
         router.push('/dashboard');
       }
@@ -747,7 +755,7 @@ export function UnifiedCourseBuilder({ mode, courseId: initialCourseId }: { mode
             <Eye size={14} /> Preview
           </button>
           <button className="btn" type="button" onClick={() => saveCourse(false)} disabled={status === 'saving'}>
-            <Save size={14} /> {status === 'saving' ? 'Saving...' : 'Save Draft'}
+            <Save size={14} /> {status === 'saving' ? 'Saving...' : course.status === 'published' ? 'Unpublish' : 'Save Draft'}
           </button>
           <button className="btn btn-primary" type="button" onClick={() => saveCourse(true)} disabled={status === 'saving'}>
             <CheckCircle2 size={14} /> Publish
