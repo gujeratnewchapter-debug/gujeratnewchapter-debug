@@ -38,6 +38,7 @@ Thumbs.db
 # Misc
 *.swp
 *.swo
+/course-site/dist/
 
 # Auto-generated files
 portal/AGENTS.md

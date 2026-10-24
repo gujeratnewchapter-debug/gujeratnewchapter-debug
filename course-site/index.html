@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A beginner-friendly course in business plan development, with a complete first lesson and practical assignment.">
+    <meta name="theme-color" content="#123c32">
+    <title>Business Plan Development</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #182a25;
+        --muted: #61736b;
+        --green: #174a3d;
+        --green-light: #e9f3ed;
+        --line: #e5eae5;
+        --paper: #fff;
+        --canvas: #f5f7f3;
+        font-family: "DM Sans", sans-serif;
+        background: var(--canvas);
+        color: var(--ink);
+        scroll-behavior: smooth;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      a { color: var(--green); }
+      .hero {
+        padding: 72px 24px 62px;
+        color: #fff;
+        background:
+          radial-gradient(ellipse at 80% 15%, #2d715a 0, transparent 36%),
+          linear-gradient(125deg, #123c32, #1b5142 65%, #174238);
+      }
+      .hero-inner, main, footer { width: min(100% - 40px, 930px); margin-inline: auto; }
+      .eyebrow {
+        margin: 0 0 16px;
+        color: #c5e5d0;
+        font-size: .77rem;
+        font-weight: 700;
+        letter-spacing: .13em;
+        text-transform: uppercase;
+      }
+      h1, h2, h3, h4 { font-family: "Manrope", sans-serif; }
+      h1 { max-width: 760px; margin: 0; font-size: clamp(2.35rem, 7vw, 4.5rem); line-height: 1.06; letter-spacing: -.055em; }
+      .hero-copy { max-width: 650px; margin: 20px 0 0; color: #e0eee7; font-size: 1.08rem; line-height: 1.7; }
+      .hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+      .pill { border: 1px solid #ffffff52; border-radius: 999px; padding: 8px 13px; color: #f5fbf7; font-size: .85rem; }
+      main { padding-block: 34px 72px; }
+      .toolbar { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+      .download {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #cfdbd2;
+        border-radius: 9px;
+        padding: 10px 14px;
+        background: #fff;
+        color: var(--green);
+        font-size: .9rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .download:hover { background: var(--green-light); }
+      #content { border: 1px solid var(--line); border-radius: 16px; padding: clamp(24px, 5vw, 52px); background: var(--paper); box-shadow: 0 10px 35px #1e3e2a0a; }
+      #content h1 { display: none; }
+      #content h2 { margin: 2.2em 0 .65em; padding-bottom: .38em; border-bottom: 1px solid var(--line); color: var(--green); font-size: clamp(1.35rem, 3vw, 1.8rem); letter-spacing: -.035em; line-height: 1.25; scroll-margin-top: 20px; }
+      #content h2:first-of-type { margin-top: 0; }
+      #content h3 { margin: 1.8em 0 .55em; color: #244538; font-size: 1.17rem; letter-spacing: -.02em; scroll-margin-top: 20px; }
+      #content h4 { margin: 1.5em 0 .5em; font-size: 1.04rem; }
+      #content p, #content li { color: #34463e; line-height: 1.78; }
+      #content li + li { margin-top: .25em; }
+      #content ul, #content ol { padding-left: 1.4em; }
+      #content strong { color: #203d31; }
+      #content blockquote { margin-inline: 0; border-left: 3px solid #78a78b; padding: 4px 0 4px 18px; color: var(--muted); }
+      #content hr { margin: 2rem 0; border: 0; border-top: 1px solid var(--line); }
+      #content table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; margin: 1.2rem 0; }
+      #content th, #content td { min-width: 125px; border: 1px solid var(--line); padding: 11px 13px; text-align: left; vertical-align: top; line-height: 1.6; }
+      #content th { background: var(--green-light); color: var(--green); font-size: .9rem; }
+      #content td { color: #34463e; }
+      #content code { border-radius: 4px; padding: 2px 5px; background: #f0f4f0; }
+      #status { color: var(--muted); text-align: center; padding: 52px 20px; }
+      footer { border-top: 1px solid var(--line); padding: 22px 0 34px; color: var(--muted); font-size: .84rem; line-height: 1.6; }
+      @media (max-width: 600px) {
+        .hero { padding: 54px 0 46px; }
+        .hero-inner, main, footer { width: min(100% - 28px, 930px); }
+        #content { border-radius: 12px; padding: 22px 18px; }
+      }
+      @media print {
+        :root { background: #fff; }
+        .hero { padding: 20px 0; background: #fff; color: var(--ink); }
+        .eyebrow, .hero-copy, .pill, .toolbar, footer { display: none; }
+        h1 { font-size: 26pt; }
+        #content { border: 0; padding: 0; box-shadow: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">Practical learning · Beginner friendly</p>
+        <h1>Business Plan Development</h1>
+        <p class="hero-copy">Move from a promising idea to a plan grounded in customer needs, market evidence, and realistic financial thinking.</p>
+        <div class="hero-meta" aria-label="Course details">
+          <span class="pill">3 modules · 9 lessons</span>
+          <span class="pill">Module 1, Lesson 1 included</span>
+          <span class="pill">Includes activity and knowledge check</span>
+        </div>
+      </div>
+    </header>
+    <main>
+      <div class="toolbar">
+        <a class="download" href="./course.md" download>Download course notes (.md)</a>
+      </div>
+      <article id="content" aria-live="polite"><p id="status">Loading the course notes…</p></article>
+    </main>
+    <footer>Course notes are provided for learning purposes. Business ideas and examples are illustrative; validate assumptions with relevant local evidence.</footer>
+    <script type="module">
+      const content = document.querySelector("#content");
+      const status = document.querySelector("#status");
+
+      try {
+        const [markdownModule, purifierModule, response] = await Promise.all([
+          import("https://cdn.jsdelivr.net/npm/marked@15.0.12/lib/marked.esm.js"),
+          import("https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.es.mjs"),
+          fetch("./course.md"),
+        ]);
+        if (!response.ok) throw new Error(`Course notes could not be loaded (${response.status}).`);
+        const markdown = await response.text();
+        const html = markdownModule.marked.parse(markdown);
+        content.innerHTML = purifierModule.default.sanitize(html);
+        content.querySelectorAll("a").forEach((link) => {
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+        });
+      } catch (error) {
+        status.textContent = "The formatted lesson could not be loaded. You can still open or download the course notes.";
+        const link = document.createElement("a");
+        link.href = "./course.md";
+        link.textContent = "Open the course notes";
+        status.append(" ", link);
+        console.error("Course page rendering failed:", error);
+      }
+    </script>
+  </body>
+</html>

@@ -3,6 +3,13 @@
 # No secrets in this file. Fill secret values in Render dashboard.
 services:
   - type: web
+    name: business-plan-development-course
+    runtime: static
+    buildCommand: node scripts/build-course-site.mjs
+    staticPublishPath: course-site/dist
+    autoDeploy: true
+
+  - type: web
     name: ethiopian-startup-school-backend
     runtime: docker
     rootDir: backend

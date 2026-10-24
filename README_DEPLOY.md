@@ -3,6 +3,7 @@ Deployment checklist — automated and manual steps
 Summary
 - Frontend (Next.js) is intended to be deployed to Vercel.
 - Backend (Django) should be deployed to a dedicated host (Render, Heroku, DigitalOcean App Platform, or a VPS) — Vercel is not a suitable host for a full Django app.
+- The standalone Business Plan Development course site is configured as a Render Static Site in `render.yaml`.
 
 Files added
 - `portal/vercel.json` — Vercel build and route placeholder (forwards `/api/*` to backend).
@@ -27,6 +28,11 @@ Quick steps (backend)
    - Start command: `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
    - Add environment variables from `backend/.env.production.example`.
 2. Ensure you configure static/media storage (S3 or Render disks) and set `MEDIA_URL`/`STATIC_URL` appropriately.
+
+Quick steps (standalone course site on Render)
+1. Sync the repository's `render.yaml` Blueprint in Render. It defines a separate `business-plan-development-course` Static Site and leaves the Django API configuration unchanged.
+2. The Static Site builds with `node scripts/build-course-site.mjs` and publishes `course-site/dist`. The build copies the course notes into the published directory; the page renders the notes and provides a Markdown download.
+3. After the first deploy succeeds, open the Static Site's `onrender.com` URL and check the course page and Markdown download.
 
 DNS and SSL
 - For production, point your domain A/ALIAS to the hosting provider (Vercel for frontend; backend host for API). Enable HTTPS using the host's automatic cert provisioning.
