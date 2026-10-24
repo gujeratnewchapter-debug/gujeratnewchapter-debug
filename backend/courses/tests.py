@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.db import connection
+from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -177,3 +179,59 @@ class LessonAndResourceAuthorizationTests(APITestCase):
 			reverse('resource-detail', args=[self.resource.id]), {'title': 'Changed'}, format='json',
 		)
 		self.assertEqual(response.status_code, 200)
+
+
+class BusinessPlanDevelopmentSeedTests(TestCase):
+	def setUp(self):
+		self.instructor = User.objects.create_user(
+			username='business-plan-instructor',
+			email='business-plan-instructor@example.com',
+			password='Password123!',
+			role=User.Role.INSTRUCTOR,
+		)
+
+	def test_seed_creates_requested_curriculum_and_complete_first_lesson(self):
+		call_command('seed_business_plan_development')
+
+		course = Course.objects.get(slug='business-plan-development')
+		sections = list(course.sections.order_by('order'))
+		self.assertEqual(course.status, Course.Status.DRAFT)
+		self.assertEqual(len(sections), 3)
+		self.assertEqual(
+			[section.title for section in sections],
+			[
+				'Module 1: Foundations of Business Planning',
+				'Module 2: Market Research and Business Strategy',
+				'Module 3: Financial Planning and the Complete Business Plan',
+			],
+		)
+		self.assertEqual(course.total_lessons, 9)
+
+		lesson = sections[0].lessons.get(order=1)
+		self.assertEqual(lesson.title, 'Introduction to Startup Business Planning')
+		self.assertEqual(lesson.lesson_type, Lesson.LessonType.TEXT)
+		self.assertTrue(lesson.is_preview)
+		self.assertIn('Practical assignment: one-page initial business idea brief', lesson.content_text)
+		self.assertIn('Answer key:</strong> 1-B, 2-B, 3-C, 4-B, 5-C.', lesson.content_text)
+		self.assertGreater(len(lesson.content_text), 5000)
+
+	def test_seed_is_idempotent(self):
+		call_command('seed_business_plan_development')
+		call_command('seed_business_plan_development')
+
+		course = Course.objects.get(slug='business-plan-development')
+		self.assertEqual(course.sections.count(), 3)
+		self.assertEqual(course.total_lessons, 9)
+
+	def test_seed_uses_superuser_when_no_instructor_exists(self):
+		self.instructor.delete()
+		administrator = User.objects.create_superuser(
+			username='business-plan-admin',
+			email='business-plan-admin@example.com',
+			password='Password123!',
+		)
+
+		call_command('seed_business_plan_development')
+
+		course = Course.objects.get(slug='business-plan-development')
+		self.assertEqual(course.instructor, administrator)

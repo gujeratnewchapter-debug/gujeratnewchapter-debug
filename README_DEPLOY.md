@@ -4,6 +4,7 @@ Summary
 - Frontend (Next.js) is intended to be deployed to Vercel.
 - Backend (Django) should be deployed to a dedicated host (Render, Heroku, DigitalOcean App Platform, or a VPS) — Vercel is not a suitable host for a full Django app.
 - The standalone Business Plan Development course site is configured as a Render Static Site in `render.yaml`.
+- The Render Django backend seeds the Business Plan Development course curriculum during startup.
 
 Files added
 - `portal/vercel.json` — Vercel build and route placeholder (forwards `/api/*` to backend).
@@ -28,6 +29,7 @@ Quick steps (backend)
    - Start command: `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
    - Add environment variables from `backend/.env.production.example`.
 2. Ensure you configure static/media storage (S3 or Render disks) and set `MEDIA_URL`/`STATIC_URL` appropriately.
+3. After database migrations, the backend creates or updates a **draft** course with the three modules, all nine lesson entries, and complete Module 1, Lesson 1 content. Seeding is enabled by default in the Docker entrypoint and explicitly enabled in the Render Blueprint; set `SEED_BUSINESS_PLAN_DEVELOPMENT=false` to disable it. The command is idempotent and preserves extra existing sections or lessons rather than deleting them. The seed uses the first instructor account, or falls back to the first Django superuser; if neither exists, startup logs a clear error and the service will not start.
 
 Quick steps (standalone course site on Render)
 1. Sync the repository's `render.yaml` Blueprint in Render. It defines a separate `business-plan-development-course` Static Site and leaves the Django API configuration unchanged.
