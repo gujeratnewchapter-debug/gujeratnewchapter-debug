@@ -115,6 +115,18 @@ class PageSection(models.Model):
     key = models.SlugField(help_text='Stable section key, for example mission or team')
     title = models.CharField(max_length=255, blank=True)
     body = models.TextField(blank=True)
+    cta_url = models.URLField(
+        'CTA URL',
+        max_length=500,
+        blank=True,
+        help_text='External destination used by a homepage section call to action.',
+    )
+    cta_label = models.CharField(
+        'CTA label',
+        max_length=100,
+        blank=True,
+        help_text='Visible link text for the section call to action.',
+    )
     image = models.ImageField(upload_to='page_sections/', blank=True, null=True)
     content = models.JSONField(default=dict, blank=True, help_text='Use en, am, om, and ti keys with title and body values.')
     order = models.PositiveIntegerField(default=0)

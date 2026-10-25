@@ -26,7 +26,7 @@ class PageSectionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PageSection
-        fields = ['key', 'title', 'body', 'image', 'content', 'order']
+        fields = ['key', 'title', 'body', 'cta_url', 'cta_label', 'image', 'content', 'order']
 
 
 class HeroImageSerializer(serializers.ModelSerializer):

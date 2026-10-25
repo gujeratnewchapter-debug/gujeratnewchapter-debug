@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, GraduationCap, Rocket, LineChart, Award, BookOpen, Users } from 'lucide-react';
+import { Search, GraduationCap, Rocket, LineChart, Award, BookOpen, Users, ArrowUpRight } from 'lucide-react';
 
 import { getCourses, getCategories, getSiteSettings, getPageContent, resolveMediaUrl } from '@/lib/api';
 import { ApiImage } from '@/components/ApiImage';
@@ -96,6 +96,15 @@ export default function HomePage() {
   const localizedHome = homeContent?.content?.[lang] ?? {};
   const noticesCallout = getHomeNoticesCallout(homeContent?.content, lang);
   const homeSections = homeContent?.sections ?? [];
+  const startupDesignationSection = homeSections.find((item: any) => item.key === 'startup_designation_announcement');
+  const startupDesignationUrl = (() => {
+    try {
+      const url = new URL(startupDesignationSection?.cta_url ?? '');
+      return url.protocol === 'https:' ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  })();
   const homeItems = (key: string) => {
     const section = homeSections.find((item: any) => item.key === key);
     const content = section?.content?.[lang] ?? section?.content ?? {};
@@ -158,6 +167,32 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {startupDesignationSection && (
+        <section className="container home-startup-designation-row" aria-labelledby="startup-designation-title">
+          <div className="home-startup-designation">
+            <div className="home-startup-designation-copy">
+              <div className="home-startup-designation-meta">
+                <p className="home-startup-designation-eyebrow">Official startup designation</p>
+                <span className="home-startup-designation-status">Applications open</span>
+              </div>
+              <h2 id="startup-designation-title">{startupDesignationSection.title}</h2>
+              <p>{startupDesignationSection.body}</p>
+            </div>
+            {startupDesignationUrl && (
+              <a
+                className="btn btn-primary home-startup-designation-link"
+                href={startupDesignationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {startupDesignationSection.cta_label || 'Complete the application'}
+                <ArrowUpRight size={16} aria-hidden="true" />
+              </a>
+            )}
+          </div>
+        </section>
+      )}
 
       {noticesCallout.visible && (
         <div className="container home-notices-callout-row">

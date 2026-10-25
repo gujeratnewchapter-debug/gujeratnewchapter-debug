@@ -3547,6 +3547,98 @@ button, a, input, textarea, select { touch-action: manipulation; }
   padding-top: 12px;
 }
 
+.home-startup-designation-row {
+  padding-top: 24px;
+}
+
+.home-startup-designation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 24px 28px;
+  border: 1px solid #c7e4d9;
+  border-left: 4px solid var(--brand);
+  border-radius: var(--radius-md);
+  background: linear-gradient(110deg, #f0f8f4 0%, #fbfdfb 72%);
+  box-shadow: var(--shadow-sm);
+}
+
+.home-startup-designation-copy {
+  max-width: 790px;
+}
+
+.home-startup-designation-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 9px;
+  margin-bottom: 7px;
+}
+
+.home-startup-designation-eyebrow {
+  margin: 0;
+  color: var(--secondary-teal);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.home-startup-designation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid #b8dfd0;
+  border-radius: 999px;
+  background: #e5f4ed;
+  color: #17654e;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+.home-startup-designation-status::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #19835f;
+  content: '';
+}
+
+.home-startup-designation h2 {
+  margin: 0 0 8px;
+  color: #173d36;
+  font-size: clamp(19px, 2.4vw, 25px);
+  line-height: 1.25;
+}
+
+.home-startup-designation-copy > p:last-child {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.home-startup-designation-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  max-width: 100%;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.home-startup-designation .home-startup-designation-link {
+  font-size: 14px;
+}
+
 .homepage-shell {
   --text-muted: #52616d;
 }
@@ -3901,6 +3993,21 @@ button, a, input, textarea, select { touch-action: manipulation; }
 }
 
 @media (max-width: 680px) {
+  .home-startup-designation-row {
+    padding-top: 16px;
+  }
+
+  .home-startup-designation {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+    padding: 20px;
+  }
+
+  .home-startup-designation-link {
+    align-self: flex-start;
+  }
+
   .home-notices-callout-row {
     padding-top: 4px;
   }

@@ -52,6 +52,8 @@ class PageContentAdmin(admin.ModelAdmin):
         ('Translations and page data', {
             'description': (
                 'Use the content JSON for translated copy. Page sections below control editable page blocks. '
+                'The Home page Startup Designation announcement is edited using its title, body, CTA URL, '
+                'CTA label, and publication controls; no JSON edits are needed. '
                 'For the Home page New notices callout, add "notices_callout": {"label": "New", '
                 '"visible": true, "pulse": true} inside each language content object.'
             ),
@@ -67,7 +69,7 @@ class PageContentAdmin(admin.ModelAdmin):
 class PageSectionInline(admin.StackedInline):
     model = PageSection
     extra = 0
-    fields = ('key', 'title', 'body', 'image', 'content', 'order', 'is_published')
+    fields = ('key', 'title', 'body', 'cta_url', 'cta_label', 'image', 'content', 'order', 'is_published')
     formfield_overrides = {
         models.JSONField: {'widget': admin.widgets.AdminTextareaWidget(attrs={'rows': 8})},
     }

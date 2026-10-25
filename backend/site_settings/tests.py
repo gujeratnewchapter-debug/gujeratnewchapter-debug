@@ -11,6 +11,55 @@ class PageContentAdminTests(TestCase):
     def test_page_sections_remain_inline_editable_with_json_content(self):
         self.assertIn(PageSectionInline, PageContentAdmin.inlines)
         self.assertIn('content', PageSectionInline.fields)
+        self.assertIn('cta_url', PageSectionInline.fields)
+        self.assertIn('cta_label', PageSectionInline.fields)
+
+    def test_home_startup_designation_is_exposed_and_publication_filtered(self):
+        page = PageContent.objects.get(slug='home')
+        section = PageSection.objects.get(
+            page=page,
+            key='startup_designation_announcement',
+        )
+
+        response = self.client.get('/api/page-content/home/')
+        self.assertEqual(response.status_code, 200)
+        section_payload = next(
+            item for item in response.json()['sections']
+            if item['key'] == 'startup_designation_announcement'
+        )
+        self.assertEqual(section_payload['title'], 'Startup Designation Registration Is Now Open!')
+        self.assertEqual(
+            section_payload['body'],
+            'Startups and startup ecosystem builders can now apply for official designation through '
+            'Ethiopia’s digital startup platform. Designation is required to access the incentives and '
+            'support provided under Ethiopia’s Startup Proclamation No. 1396/2025. Complete the '
+            'application form and submit the required supporting documents at startupethiopia.et.',
+        )
+        self.assertEqual(section_payload['cta_url'], 'https://startupethiopia.et/')
+        self.assertEqual(section_payload['cta_label'], 'Complete the application')
+
+        section.title = 'Custom announcement title'
+        section.body = 'Custom admin-edited announcement copy.'
+        section.cta_url = 'https://example.org/apply'
+        section.cta_label = 'Apply with custom label'
+        section.save()
+        edited_response = self.client.get('/api/page-content/home/')
+        edited_section = next(
+            item for item in edited_response.json()['sections']
+            if item['key'] == 'startup_designation_announcement'
+        )
+        self.assertEqual(edited_section['title'], 'Custom announcement title')
+        self.assertEqual(edited_section['body'], 'Custom admin-edited announcement copy.')
+        self.assertEqual(edited_section['cta_url'], 'https://example.org/apply')
+        self.assertEqual(edited_section['cta_label'], 'Apply with custom label')
+
+        section.is_published = False
+        section.save(update_fields=['is_published'])
+        unpublished_response = self.client.get('/api/page-content/home/')
+        self.assertNotIn(
+            'startup_designation_announcement',
+            [item['key'] for item in unpublished_response.json()['sections']],
+        )
 
     def test_home_sign_in_guide_cms_content_is_exposed_in_public_page_payload(self):
         page = PageContent.objects.get(slug='home')
@@ -154,6 +203,78 @@ class SignInProcessMigrationTests(TransactionTestCase):
         self.assertEqual(section.body, 'Admin body')
         self.assertEqual(section.content, content)
         self.assertEqual(section.order, 27)
+        self.assertFalse(section.is_published)
+
+
+class StartupDesignationAnnouncementMigrationTests(TransactionTestCase):
+    migrate_from = ('site_settings', '0013_split_legacy_sign_in_steps')
+    migrate_to = ('site_settings', '0014_startup_designation_announcement')
+
+    def migrate_to_target(self, target):
+        executor = MigrationExecutor(connection)
+        executor.migrate([target])
+        return executor.loader.project_state([target]).apps
+
+    def setUp(self):
+        super().setUp()
+        apps = self.migrate_to_target(self.migrate_from)
+        PageContent = apps.get_model('site_settings', 'PageContent')
+        self.PageSection = apps.get_model('site_settings', 'PageSection')
+        self.home, _ = PageContent.objects.get_or_create(
+            slug='home',
+            defaults={
+                'title': 'Ethiopian Startup School',
+                'description': 'Learn entrepreneurship, AI, and business skills with practical guidance.',
+            },
+        )
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+    def test_migration_seeds_initial_published_announcement(self):
+        apps = self.migrate_to_target(self.migrate_to)
+        PageSection = apps.get_model('site_settings', 'PageSection')
+        section = PageSection.objects.get(
+            page__slug='home',
+            key='startup_designation_announcement',
+        )
+
+        self.assertEqual(section.title, 'Startup Designation Registration Is Now Open!')
+        self.assertEqual(
+            section.body,
+            'Startups and startup ecosystem builders can now apply for official designation through '
+            'Ethiopia’s digital startup platform. Designation is required to access the incentives and '
+            'support provided under Ethiopia’s Startup Proclamation No. 1396/2025. Complete the '
+            'application form and submit the required supporting documents at startupethiopia.et.',
+        )
+        self.assertEqual(section.cta_url, 'https://startupethiopia.et/')
+        self.assertEqual(section.cta_label, 'Complete the application')
+        self.assertTrue(section.is_published)
+
+    def test_migration_preserves_existing_admin_edits(self):
+        self.PageSection.objects.create(
+            page=self.home,
+            key='startup_designation_announcement',
+            title='Edited title',
+            body='Edited copy',
+            order=17,
+            is_published=False,
+        )
+
+        apps = self.migrate_to_target(self.migrate_to)
+        PageSection = apps.get_model('site_settings', 'PageSection')
+        section = PageSection.objects.get(
+            page__slug='home',
+            key='startup_designation_announcement',
+        )
+
+        self.assertEqual(section.title, 'Edited title')
+        self.assertEqual(section.body, 'Edited copy')
+        self.assertEqual(section.cta_url, '')
+        self.assertEqual(section.cta_label, '')
+        self.assertEqual(section.order, 17)
         self.assertFalse(section.is_published)
 
 
