@@ -3,6 +3,7 @@ from pathlib import Path
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils.html import escape
 
 from courses.models import Category, Course, Lesson, Section
 
@@ -36,6 +37,14 @@ MODULES = (
 
 LESSON_CONTENT_DIR = Path(__file__).resolve().parents[2] / 'content'
 LESSON_DURATIONS_MINUTES = (90, 150, 120, 150, 135, 150, 135, 165, 150)
+
+
+def build_course_outline():
+    modules = []
+    for module_order, (module_title, lesson_titles) in enumerate(MODULES, start=1):
+        lessons = ''.join(f'<li>{escape(title)}</li>' for title in lesson_titles)
+        modules.append(f'<h3>Module {module_order}: {escape(module_title)}</h3><ol>{lessons}</ol>')
+    return '<h2>Course structure</h2>' + ''.join(modules)
 
 
 class Command(BaseCommand):
@@ -79,6 +88,8 @@ class Command(BaseCommand):
                     'short_description': (
                         'Learn to develop an evidence-informed business plan, one practical step at a time.'
                     ),
+                    'notes': build_course_outline(),
+                    'notes_enabled': True,
                     'learning_objectives': (
                         'Explain startup planning; identify and test customer problems; develop a value proposition '
                         'and objectives; research customers and competitors; choose a business model and pricing '

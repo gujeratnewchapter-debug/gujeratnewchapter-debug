@@ -196,6 +196,12 @@ class BusinessPlanDevelopmentSeedTests(TestCase):
 		course = Course.objects.get(slug='business-plan-development')
 		sections = list(course.sections.order_by('order'))
 		self.assertEqual(course.status, Course.Status.DRAFT)
+		self.assertTrue(course.notes_enabled)
+		self.assertIn('Module 1: Foundations of Business Planning', course.notes)
+		self.assertIn(
+			'Writing, Presenting, and Improving the Complete Business Plan',
+			course.notes,
+		)
 		self.assertEqual(len(sections), 3)
 		self.assertEqual(
 			[section.title for section in sections],
@@ -246,6 +252,7 @@ class BusinessPlanDevelopmentSeedTests(TestCase):
 
 		course.refresh_from_db()
 		self.assertEqual(course.status, Course.Status.PUBLISHED)
+		self.assertTrue(course.notes_enabled)
 		self.assertEqual(course.sections.count(), 3)
 		self.assertEqual(course.total_lessons, 9)
 
