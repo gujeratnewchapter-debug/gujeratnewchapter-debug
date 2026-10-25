@@ -109,7 +109,7 @@ class Command(BaseCommand):
                     'price': 0,
                     'is_free': True,
                     'language': 'English',
-                    'duration_hours': 14,
+                    'duration_hours': (sum(LESSON_DURATIONS_MINUTES) + 59) // 60,
                 },
             )
 
