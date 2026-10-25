@@ -6,7 +6,6 @@ if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
 fi
 if [ "${SEED_BUSINESS_PLAN_DEVELOPMENT:-true}" = "true" ]; then
   python manage.py seed_business_plan_development
-  python manage.py seed_business_plan_development_lesson_2
 fi
 python manage.py collectstatic --noinput
 # Coolify provides $PORT; default to 8000 for local Docker.

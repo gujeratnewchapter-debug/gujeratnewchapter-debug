@@ -214,12 +214,38 @@ class BusinessPlanDevelopmentSeedTests(TestCase):
 		self.assertIn('Practical assignment: one-page initial business idea brief', lesson.content_text)
 		self.assertIn('Answer key:</strong> 1-B, 2-B, 3-C, 4-B, 5-C.', lesson.content_text)
 		self.assertGreater(len(lesson.content_text), 5000)
+		lesson_two = sections[0].lessons.get(order=2)
+		self.assertEqual(
+			lesson_two.title,
+			'Identifying Customer Problems and Testing Business Ideas',
+		)
+		self.assertIn('Learner worksheet 4: experiment card', lesson_two.content_text)
+		for section in sections:
+			for seeded_lesson in section.lessons.all():
+				self.assertNotIn(
+					'Full lesson content will be added in a later update',
+					seeded_lesson.content_text,
+				)
+				self.assertGreater(len(seeded_lesson.content_text), 3000)
+		self.assertEqual(
+			[
+				lesson.duration_minutes
+				for section in sections
+				for lesson in section.lessons.all()
+			],
+			[90, 150, 120, 150, 135, 150, 135, 165, 150],
+		)
 
 	def test_seed_is_idempotent(self):
 		call_command('seed_business_plan_development')
+		course = Course.objects.get(slug='business-plan-development')
+		course.status = Course.Status.PUBLISHED
+		course.save(update_fields=['status'])
+
 		call_command('seed_business_plan_development')
 
-		course = Course.objects.get(slug='business-plan-development')
+		course.refresh_from_db()
+		self.assertEqual(course.status, Course.Status.PUBLISHED)
 		self.assertEqual(course.sections.count(), 3)
 		self.assertEqual(course.total_lessons, 9)
 

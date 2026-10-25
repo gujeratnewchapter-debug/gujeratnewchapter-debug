@@ -34,11 +34,12 @@ MODULES = (
     ),
 )
 
-LESSON_ONE_PATH = Path(__file__).resolve().parents[2] / 'content' / 'business_plan_development_lesson_1.html'
+LESSON_CONTENT_DIR = Path(__file__).resolve().parents[2] / 'content'
+LESSON_DURATIONS_MINUTES = (90, 150, 120, 150, 135, 150, 135, 165, 150)
 
 
 class Command(BaseCommand):
-    help = 'Create or update the Business Plan Development course and its first lesson.'
+    help = 'Create or update the Business Plan Development course and all nine detailed lessons.'
 
     def add_arguments(self, parser):
         parser.add_argument('--instructor', help='Instructor username or user ID.')
@@ -46,14 +47,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         instructor = self._get_instructor(options.get('instructor'))
-        if not LESSON_ONE_PATH.is_file():
-            raise CommandError(f'Lesson content file is missing: {LESSON_ONE_PATH}')
-
-        lesson_one_content = LESSON_ONE_PATH.read_text(encoding='utf-8')
+        lesson_contents = {}
+        for lesson_number in range(1, 10):
+            content_path = LESSON_CONTENT_DIR / f'business_plan_development_lesson_{lesson_number}.html'
+            if not content_path.is_file():
+                raise CommandError(f'Lesson content file is missing: {content_path}')
+            lesson_contents[lesson_number] = content_path.read_text(encoding='utf-8')
         total_lessons = sum(len(lessons) for _, lessons in MODULES)
         if options['dry_run']:
             self.stdout.write(self.style.SUCCESS(
-                f'Validated 3 modules, {total_lessons} lesson entries, and the full first-lesson content.'
+                f'Validated 3 modules, {total_lessons} lesson entries, and all nine detailed lesson files.'
             ))
             return
 
@@ -92,8 +95,6 @@ class Command(BaseCommand):
                     'instructor': instructor,
                     'category': category,
                     'level': Course.Level.BEGINNER,
-                    'status': Course.Status.DRAFT,
-                    'published_at': None,
                     'price': 0,
                     'is_free': True,
                     'language': 'English',
@@ -101,6 +102,7 @@ class Command(BaseCommand):
                 },
             )
 
+            lesson_number = 0
             for module_order, (module_title, lesson_titles) in enumerate(MODULES, start=1):
                 section, _ = Section.objects.update_or_create(
                     course=course,
@@ -109,23 +111,16 @@ class Command(BaseCommand):
                 )
 
                 for lesson_order, lesson_title in enumerate(lesson_titles, start=1):
-                    content = (
-                        lesson_one_content
-                        if module_order == 1 and lesson_order == 1
-                        else (
-                            '<p>This lesson is included in the course structure. '
-                            'Full lesson content will be added in a later update.</p>'
-                        )
-                    )
+                    lesson_number += 1
                     Lesson.objects.update_or_create(
                         section=section,
                         order=lesson_order,
                         defaults={
                             'title': lesson_title,
                             'lesson_type': Lesson.LessonType.TEXT,
-                            'content_text': content,
-                            'duration_minutes': 90,
-                            'is_preview': module_order == 1 and lesson_order == 1,
+                            'content_text': lesson_contents[lesson_number],
+                            'duration_minutes': LESSON_DURATIONS_MINUTES[lesson_number - 1],
+                            'is_preview': lesson_number == 1,
                             'is_downloadable': True,
                         },
                     )
@@ -138,8 +133,7 @@ class Command(BaseCommand):
 
         action = 'Created' if created else 'Updated'
         self.stdout.write(self.style.SUCCESS(
-            f'{action} draft course "{course.title}" with 3 modules and {total_lessons} lesson entries. '
-            f'Module 1, Lesson 1 contains the complete lesson notes.'
+            f'{action} course "{course.title}" with 3 modules and {total_lessons} detailed lessons.'
         ))
         if extra_sections or extra_lessons:
             self.stdout.write(self.style.WARNING(
