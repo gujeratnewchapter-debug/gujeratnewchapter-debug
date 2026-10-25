@@ -258,6 +258,55 @@ class BusinessPlanDevelopmentSeedTests(TestCase):
 		self.assertEqual(course.sections.count(), 3)
 		self.assertEqual(course.total_lessons, 9)
 
+	def test_seed_removes_outdated_modules_and_lessons_only_from_target_course(self):
+		course = Course.objects.create(
+			title='Old Business Plan Development',
+			slug='business-plan-development',
+			description='Old course',
+			instructor=self.instructor,
+		)
+		for section_order in range(1, 13):
+			section = Section.objects.create(
+				course=course,
+				title=f'Old Module {section_order}',
+				order=section_order,
+			)
+			lesson_count = 5 if section_order == 1 else 3
+			for lesson_order in range(1, lesson_count + 1):
+				Lesson.objects.create(
+					section=section,
+					title=f'Old lesson {section_order}-{lesson_order}',
+					order=lesson_order,
+				)
+
+		other_course = Course.objects.create(
+			title='Unrelated course',
+			slug='unrelated-course',
+			description='Keep this course unchanged',
+			instructor=self.instructor,
+		)
+		other_section = Section.objects.create(
+			course=other_course,
+			title='Unrelated module',
+			order=1,
+		)
+
+		call_command('seed_business_plan_development')
+
+		course.refresh_from_db()
+		self.assertEqual(course.sections.count(), 3)
+		self.assertEqual(course.total_lessons, 9)
+		self.assertEqual(
+			list(course.sections.values_list('title', flat=True)),
+			[
+				'Module 1: Foundations of Business Planning',
+				'Module 2: Market Research and Business Strategy',
+				'Module 3: Financial Planning and the Complete Business Plan',
+			],
+		)
+		self.assertTrue(Section.objects.filter(pk=other_section.pk).exists())
+		self.assertEqual(other_course.sections.count(), 1)
+
 	def test_seed_uses_superuser_when_no_instructor_exists(self):
 		self.instructor.delete()
 		administrator = User.objects.create_superuser(

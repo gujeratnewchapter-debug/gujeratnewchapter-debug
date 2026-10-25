@@ -114,16 +114,20 @@ class Command(BaseCommand):
             )
 
             lesson_number = 0
+            section_ids = []
+            extra_lessons = 0
             for module_order, (module_title, lesson_titles) in enumerate(MODULES, start=1):
                 section, _ = Section.objects.update_or_create(
                     course=course,
                     order=module_order,
                     defaults={'title': f'Module {module_order}: {module_title}'},
                 )
+                section_ids.append(section.pk)
+                lesson_ids = []
 
                 for lesson_order, lesson_title in enumerate(lesson_titles, start=1):
                     lesson_number += 1
-                    Lesson.objects.update_or_create(
+                    lesson, _ = Lesson.objects.update_or_create(
                         section=section,
                         order=lesson_order,
                         defaults={
@@ -135,12 +139,16 @@ class Command(BaseCommand):
                             'is_downloadable': True,
                         },
                     )
+                    lesson_ids.append(lesson.pk)
 
-            extra_sections = Section.objects.filter(course=course, order__gt=len(MODULES)).count()
-            extra_lessons = Lesson.objects.filter(
-                section__course=course,
-                order__gt=3,
-            ).count()
+                stale_lessons = Lesson.objects.filter(section=section).exclude(pk__in=lesson_ids)
+                extra_lessons += stale_lessons.count()
+                stale_lessons.delete()
+
+            stale_sections = Section.objects.filter(course=course).exclude(pk__in=section_ids)
+            extra_sections = stale_sections.count()
+            extra_lessons += Lesson.objects.filter(section__in=stale_sections).count()
+            stale_sections.delete()
 
         action = 'Created' if created else 'Updated'
         self.stdout.write(self.style.SUCCESS(
@@ -148,8 +156,8 @@ class Command(BaseCommand):
         ))
         if extra_sections or extra_lessons:
             self.stdout.write(self.style.WARNING(
-                f'Preserved existing content without deleting it: {extra_sections} extra module(s) and '
-                f'{extra_lessons} lesson(s) beyond the requested structure.'
+                f'Removed {extra_sections} outdated module(s) and {extra_lessons} outdated lesson(s) '
+                'from this course. Related lesson/module records are also removed by database cascades.'
             ))
 
     def _get_instructor(self, identifier):
