@@ -5,6 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import CursorImageTrail from '@/components/CursorImageTrail';
 import { PlatformStatsPopup } from '@/components/PlatformStatsPopup';
+import { AdvertisementPopup } from '@/components/AdvertisementPopup';
 
 export const metadata: Metadata = {
   title: 'Ethiopian Startup School',
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="app-shell">
             <CursorImageTrail />
             <PlatformStatsPopup />
+            <AdvertisementPopup />
             <Navbar />
             <main style={{ minHeight: '70vh' }}>{children}</main>
             <div className="woven-band" />

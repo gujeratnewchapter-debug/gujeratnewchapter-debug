@@ -1,5 +1,14 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from .models import SiteSettings, ContactMessage, HeroImage, PageContent, PageSection
+from .models import (
+    Advertisement,
+    AdvertisementEvent,
+    SiteSettings,
+    ContactMessage,
+    HeroImage,
+    PageContent,
+    PageSection,
+)
 
 
 class ContactMessageSerializer(serializers.ModelSerializer):
@@ -27,6 +36,60 @@ class PageSectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PageSection
         fields = ['key', 'title', 'body', 'cta_url', 'cta_label', 'image', 'content', 'order']
+
+
+class AdvertisementSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    video_file = serializers.SerializerMethodField()
+    advertiser_logo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Advertisement
+        fields = [
+            'id', 'advertiser_name', 'content_type', 'headline', 'description',
+            'promotional_text', 'image', 'image_url', 'image_alt_text', 'video_file',
+            'video_url', 'advertiser_logo', 'cta_label', 'destination_url',
+            'display_delay_seconds', 'close_countdown_seconds', 'frequency',
+        ]
+
+    def _media_url(self, file_field):
+        if not file_field:
+            return None
+        url = file_field.url
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request and url.startswith('/') else url
+
+    def get_image(self, obj):
+        return self._media_url(obj.image) or obj.image_url or None
+
+    def get_video_file(self, obj):
+        return self._media_url(obj.video_file)
+
+    def get_advertiser_logo(self, obj):
+        return self._media_url(obj.advertiser_logo)
+
+    def validate(self, attrs):
+        candidate = Advertisement(**{
+            field.name: getattr(self.instance, field.name)
+            for field in Advertisement._meta.fields
+            if self.instance is not None
+            and field.name not in ('id', 'created_at', 'updated_at')
+        })
+        for field, value in attrs.items():
+            setattr(candidate, field, value)
+        try:
+            candidate.clean()
+        except DjangoValidationError as error:
+            if hasattr(error, 'message_dict'):
+                raise serializers.ValidationError(error.message_dict) from error
+            raise serializers.ValidationError(error.messages) from error
+        return attrs
+
+
+class AdvertisementEventSerializer(serializers.Serializer):
+    advertisement_id = serializers.IntegerField(min_value=1)
+    event_type = serializers.ChoiceField(choices=AdvertisementEvent.EventType.choices)
+    event_id = serializers.UUIDField()
 
 
 class HeroImageSerializer(serializers.ModelSerializer):

@@ -1,8 +1,17 @@
+from django.db import IntegrityError, models, transaction
+from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import SiteSettings, ContactMessage, PageContent
-from .serializers import SiteSettingsSerializer, ContactMessageSerializer, PageContentSerializer
+from rest_framework import status
+from .models import Advertisement, AdvertisementEvent, SiteSettings, ContactMessage, PageContent
+from .serializers import (
+    AdvertisementEventSerializer,
+    AdvertisementSerializer,
+    SiteSettingsSerializer,
+    ContactMessageSerializer,
+    PageContentSerializer,
+)
 
 
 class SiteSettingsView(APIView):
@@ -59,3 +68,61 @@ class PageContentView(APIView):
         if page is None:
             return Response({'detail': 'Page content not found.'}, status=404)
         return Response(PageContentSerializer(page, context={'request': request}).data)
+
+
+class AdvertisementListView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        if not SiteSettings.load().advertisements_enabled:
+            return Response([])
+        route = request.query_params.get('path', '/')
+        if not route.startswith('/') or route.startswith('//') or '?' in route or '#' in route:
+            return Response({'detail': 'Provide a valid route path.'}, status=status.HTTP_400_BAD_REQUEST)
+        advertisements = Advertisement.active_for_route(route, now=timezone.now())
+        data = AdvertisementSerializer(
+            advertisements,
+            many=True,
+            context={'request': request},
+        ).data
+        return Response(data)
+
+
+class AdvertisementEventView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = AdvertisementEventSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        advertisement = Advertisement.objects.filter(
+            pk=values['advertisement_id'],
+            is_active=True,
+        ).filter(
+            models.Q(starts_at__isnull=True) | models.Q(starts_at__lte=timezone.now()),
+            models.Q(ends_at__isnull=True) | models.Q(ends_at__gt=timezone.now()),
+        ).first()
+        if advertisement is None or not SiteSettings.load().advertisements_enabled:
+            return Response({'detail': 'Advertisement is not active.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            with transaction.atomic():
+                event, created = AdvertisementEvent.objects.get_or_create(
+                    event_id=values['event_id'],
+                    defaults={
+                        'advertisement': advertisement,
+                        'event_type': values['event_type'],
+                    },
+                )
+        except IntegrityError:
+            event = AdvertisementEvent.objects.filter(event_id=values['event_id']).first()
+            created = False
+
+        if event is None:
+            return Response({'detail': 'Unable to record advertisement event.'}, status=500)
+        if not created and (
+            event.advertisement_id != advertisement.id
+            or event.event_type != values['event_type']
+        ):
+            return Response({'detail': 'Event identifier has already been used.'}, status=409)
+        return Response({'tracked': created}, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

@@ -299,6 +299,41 @@ export const updateMe = (payload: any) => apiClient.patch('/auth/me/', payload);
 export const getSiteSettings = () => apiClient.get('/site-settings/', { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
 export const getPageContent = (slug: string) => apiClient.get(`/page-content/${slug}/`, { timeout: PUBLIC_CONTENT_TIMEOUT, params: { _fresh: Date.now() } });
 
+export type Advertisement = {
+  id: number;
+  advertiser_name: string;
+  content_type: 'image' | 'video' | 'text' | 'mixed';
+  headline: string;
+  description: string;
+  promotional_text: string;
+  image: string | null;
+  image_url: string;
+  image_alt_text: string;
+  video_file: string | null;
+  video_url: string;
+  advertiser_logo: string | null;
+  cta_label: string;
+  destination_url: string;
+  display_delay_seconds: number;
+  close_countdown_seconds: number;
+  frequency: 'session' | 'daily' | 'every_visit';
+};
+
+export const getAdvertisements = (path: string) =>
+  apiClient.get<Advertisement[]>('/advertisements/', {
+    timeout: PUBLIC_CONTENT_TIMEOUT,
+    params: { path, _fresh: Date.now() },
+  });
+export const trackAdvertisementEvent = (
+  advertisementId: number,
+  eventType: 'impression' | 'click',
+  eventId: string,
+) => apiClient.post('/advertisement-events/', {
+  advertisement_id: advertisementId,
+  event_type: eventType,
+  event_id: eventId,
+}, { timeout: 5000 });
+
 // ---- News ----
 export type NewsArticle = {
   id: number;
