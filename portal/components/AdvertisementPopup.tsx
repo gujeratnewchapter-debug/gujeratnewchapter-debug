@@ -55,11 +55,11 @@ function getVideoEmbedUrl(value: string) {
         ? url.pathname.split('/').filter(Boolean)[0]
         : url.searchParams.get('v') ?? url.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
       if (!videoId || !/^[\w-]{11}$/.test(videoId)) return null;
-      return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0`;
+      return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&autoplay=1&mute=1`;
     }
 
     const vimeoId = url.pathname.split('/').filter(Boolean).find((part) => /^\d+$/.test(part));
-    return vimeoId ? `https://player.vimeo.com/video/${vimeoId}` : null;
+    return vimeoId ? `https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=1` : null;
   } catch {
     return null;
   }
@@ -283,7 +283,9 @@ export function AdvertisementPopup() {
         {videoFile && !videoFailed && (
           <video
             className="advertisement-video"
+            autoPlay
             controls
+            muted
             preload="metadata"
             playsInline
             onError={() => setVideoFailed(true)}
@@ -298,7 +300,7 @@ export function AdvertisementPopup() {
             <iframe
               src={videoEmbed}
               title={advertisement.headline || `Video advertisement from ${advertisement.advertiser_name || 'sponsor'}`}
-              allow="encrypted-media; picture-in-picture"
+              allow="autoplay; encrypted-media; picture-in-picture"
               allowFullScreen
               onError={() => setVideoFailed(true)}
             />
