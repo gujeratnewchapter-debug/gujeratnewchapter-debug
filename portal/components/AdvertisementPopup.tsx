@@ -131,6 +131,7 @@ export function AdvertisementPopup() {
   const [secondsRemaining, setSecondsRemaining] = useState(0);
   const [videoFailed, setVideoFailed] = useState(false);
   const [videoNeedsGesture, setVideoNeedsGesture] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -150,6 +151,7 @@ export function AdvertisementPopup() {
     setAdvertisement(null);
     setVideoFailed(false);
     setVideoNeedsGesture(false);
+    setVideoMuted(false);
     videoAutoplayAttempted.current = false;
     setImageFailed(false);
 
@@ -259,7 +261,10 @@ export function AdvertisementPopup() {
     if (!video) return;
     video.muted = false;
     video.play()
-      .then(() => setVideoNeedsGesture(false))
+      .then(() => {
+        setVideoMuted(false);
+        setVideoNeedsGesture(false);
+      })
       .catch(() => setVideoNeedsGesture(true));
   }
 
@@ -300,16 +305,23 @@ export function AdvertisementPopup() {
             className="advertisement-video"
             autoPlay
             controls
-            muted={false}
+            muted={videoMuted}
             preload="metadata"
             playsInline
             onError={() => setVideoFailed(true)}
             onCanPlay={(event) => {
               if (videoAutoplayAttempted.current) return;
               videoAutoplayAttempted.current = true;
-              event.currentTarget.play()
+              const video = event.currentTarget;
+              video.play()
                 .then(() => setVideoNeedsGesture(false))
-                .catch(() => setVideoNeedsGesture(true));
+                .catch(() => {
+                  video.muted = true;
+                  setVideoMuted(true);
+                  video.play()
+                    .then(() => setVideoNeedsGesture(false))
+                    .catch(() => setVideoNeedsGesture(true));
+                })
             }}
             aria-label={advertisement.headline || `Video advertisement from ${advertisement.advertiser_name || 'sponsor'}`}
           >
@@ -317,11 +329,13 @@ export function AdvertisementPopup() {
             Your browser could not play this advertisement.
           </video>
         )}
-        {videoFile && videoNeedsGesture && !videoFailed && (
+        {videoFile && !videoFailed && (videoMuted || videoNeedsGesture) && (
           <div className="advertisement-video-fallback">
-            <p>Your browser blocked autoplay with sound.</p>
+            <p>{videoNeedsGesture
+              ? 'Your browser blocked video autoplay.'
+              : 'Your browser blocked autoplay with sound. Video is playing without sound.'}</p>
             <button type="button" className="btn btn-primary" onClick={playVideoWithSound}>
-              Play with sound
+              {videoNeedsGesture ? 'Play with sound' : 'Turn sound on'}
             </button>
           </div>
         )}
@@ -338,7 +352,7 @@ export function AdvertisementPopup() {
         )}
         {videoEmbed && !videoFailed && (
           <p className="advertisement-video-note">
-            If your browser blocks autoplay with sound, start playback using the video player controls.
+            Video attempts to autoplay with sound. If blocked by your browser, use the player controls to start it.
           </p>
         )}
         {(videoUnavailable || (advertisement.content_type === 'video' && !videoConfigured)) && (
