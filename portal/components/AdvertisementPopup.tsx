@@ -55,11 +55,11 @@ function getVideoEmbedUrl(value: string) {
         ? url.pathname.split('/').filter(Boolean)[0]
         : url.searchParams.get('v') ?? url.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
       if (!videoId || !/^[\w-]{11}$/.test(videoId)) return null;
-      return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&autoplay=1&mute=1`;
+      return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&autoplay=1&mute=0`;
     }
 
     const vimeoId = url.pathname.split('/').filter(Boolean).find((part) => /^\d+$/.test(part));
-    return vimeoId ? `https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=1` : null;
+    return vimeoId ? `https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=0` : null;
   } catch {
     return null;
   }
@@ -130,8 +130,11 @@ export function AdvertisementPopup() {
   const [advertisement, setAdvertisement] = useState<Advertisement | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(0);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [videoNeedsGesture, setVideoNeedsGesture] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoAutoplayAttempted = useRef(false);
   const visitIds = useRef(new Set<number>());
   const clickedIds = useRef(new Set<number>());
   const impressedIds = useRef(new Set<number>());
@@ -146,6 +149,8 @@ export function AdvertisementPopup() {
     let delayTimer: number | undefined;
     setAdvertisement(null);
     setVideoFailed(false);
+    setVideoNeedsGesture(false);
+    videoAutoplayAttempted.current = false;
     setImageFailed(false);
 
     getAdvertisements(pathname)
@@ -249,6 +254,15 @@ export function AdvertisementPopup() {
     sendEvent(advertisement.id, 'click');
   }
 
+  function playVideoWithSound() {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = false;
+    video.play()
+      .then(() => setVideoNeedsGesture(false))
+      .catch(() => setVideoNeedsGesture(true));
+  }
+
   return (
     <div
       className="advertisement-backdrop"
@@ -282,18 +296,34 @@ export function AdvertisementPopup() {
 
         {videoFile && !videoFailed && (
           <video
+            ref={videoRef}
             className="advertisement-video"
             autoPlay
             controls
-            muted
+            muted={false}
             preload="metadata"
             playsInline
             onError={() => setVideoFailed(true)}
+            onCanPlay={(event) => {
+              if (videoAutoplayAttempted.current) return;
+              videoAutoplayAttempted.current = true;
+              event.currentTarget.play()
+                .then(() => setVideoNeedsGesture(false))
+                .catch(() => setVideoNeedsGesture(true));
+            }}
             aria-label={advertisement.headline || `Video advertisement from ${advertisement.advertiser_name || 'sponsor'}`}
           >
             <source src={videoFile} />
             Your browser could not play this advertisement.
           </video>
+        )}
+        {videoFile && videoNeedsGesture && !videoFailed && (
+          <div className="advertisement-video-fallback">
+            <p>Your browser blocked autoplay with sound.</p>
+            <button type="button" className="btn btn-primary" onClick={playVideoWithSound}>
+              Play with sound
+            </button>
+          </div>
         )}
         {videoEmbed && !videoFailed && (
           <div className="advertisement-video-frame">
@@ -305,6 +335,11 @@ export function AdvertisementPopup() {
               onError={() => setVideoFailed(true)}
             />
           </div>
+        )}
+        {videoEmbed && !videoFailed && (
+          <p className="advertisement-video-note">
+            If your browser blocks autoplay with sound, start playback using the video player controls.
+          </p>
         )}
         {(videoUnavailable || (advertisement.content_type === 'video' && !videoConfigured)) && (
           <p className="advertisement-fallback">This video advertisement is unavailable.</p>
@@ -349,7 +384,7 @@ export function AdvertisementPopup() {
           {!advertisement.headline && <h2 id="advertisement-headline" className="sr-only">Sponsored advertisement</h2>}
           {advertisement.description && <p>{advertisement.description}</p>}
           {advertisement.promotional_text && <p className="advertisement-offer">{advertisement.promotional_text}</p>}
-          {destination && advertisement.cta_label && (
+          {destination && (
             <a
               className="btn btn-primary advertisement-cta"
               href={destination}
@@ -357,7 +392,7 @@ export function AdvertisementPopup() {
               rel="noopener noreferrer"
               onClick={trackClick}
             >
-              {advertisement.cta_label}
+              {advertisement.cta_label || 'Visit advertiser'}
               <ArrowUpRight size={16} aria-hidden="true" />
             </a>
           )}
