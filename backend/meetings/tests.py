@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 import jwt
+from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -367,3 +368,10 @@ class MeetingAuthorizationTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['unknown_emails'], ['missing@example.com'])
+
+
+class MeetingAdminTests(TestCase):
+    def test_meeting_models_are_registered_in_django_admin(self):
+        self.assertTrue(admin.site.is_registered(Meeting))
+        self.assertTrue(admin.site.is_registered(MeetingParticipant))
+        self.assertTrue(admin.site.is_registered(MeetingInvitation))
