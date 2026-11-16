@@ -47,7 +47,7 @@ export interface LiveKitToken {
   url: string;
 }
 
-const collection = '/meetings/meetings/';
+const collection = '/meetings/';
 
 export const getMeetings = (params?: Record<string, string | number>) =>
   apiClient.get(collection, { params });
