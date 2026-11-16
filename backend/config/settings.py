@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'certificates',
     'courses',
     'enrollments',
+    'meetings',
     'quizzes',
     'site_settings',
     'ess_platform',
@@ -340,6 +341,15 @@ if not DEBUG and not (SUPABASE_JWT_SECRET or SUPABASE_JWKS_URL):
 # Google OAuth client used by server-side verification of ID tokens in accounts.GoogleLoginView
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
 GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '')
+
+LIVEKIT_URL = os.environ.get('LIVEKIT_URL', 'ws://localhost:7880' if DEBUG else '').strip()
+LIVEKIT_API_KEY = os.environ.get('LIVEKIT_API_KEY', '')
+LIVEKIT_API_SECRET = os.environ.get('LIVEKIT_API_SECRET', '')
+livekit_url_parts = urlparse(LIVEKIT_URL)
+if not DEBUG and LIVEKIT_URL and (livekit_url_parts.scheme != 'wss' or not livekit_url_parts.netloc):
+    raise RuntimeError('LIVEKIT_URL must be a valid wss:// URL when DJANGO_DEBUG is false.')
+if bool(LIVEKIT_API_KEY) != bool(LIVEKIT_API_SECRET):
+    raise RuntimeError('LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be configured together.')
 
 # Configure at least one provider key on the backend to enable AI responses.
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')

@@ -6,6 +6,7 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         SUPER_ADMIN = 'super_admin', 'Super Administrator'
         INSTRUCTOR = 'instructor', 'Instructor'
+        MENTOR = 'mentor', 'Mentor'
         STUDENT = 'student', 'Student'
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.STUDENT)
@@ -28,6 +29,10 @@ class User(AbstractUser):
     @property
     def is_instructor(self):
         return self.role == self.Role.INSTRUCTOR
+
+    @property
+    def is_mentor(self):
+        return self.role == self.Role.MENTOR
 
     @property
     def is_super_admin(self):

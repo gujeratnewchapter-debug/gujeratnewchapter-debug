@@ -12,7 +12,7 @@ import {
 import { getStoredDjangoAccessToken, isUsableJwtToken } from './auth-token';
 import { getAuthRedirectUrl } from './auth-redirect';
 
-export type Role = 'student' | 'instructor' | 'super_admin';
+export type Role = 'student' | 'instructor' | 'mentor' | 'super_admin';
 
 export interface User {
   id: string | number;

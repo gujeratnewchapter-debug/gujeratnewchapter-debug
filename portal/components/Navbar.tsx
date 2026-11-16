@@ -78,6 +78,7 @@ export function Navbar() {
             <Link href="/" className={pathname === '/' ? 'active' : ''}>{t('home')}</Link>
             <Link href="/about-us" className={pathname === '/about-us' ? 'active' : ''}>{t('aboutUs')}</Link>
             <Link href="/courses" className={pathname?.startsWith('/courses') ? 'active' : ''}>{t('courses')}</Link>
+            {isAuthenticated && <Link href="/meetings" className={pathname?.startsWith('/meetings') ? 'active' : ''}>Meetings</Link>}
             <Link href="/ai/business-advisor" className={pathname?.startsWith('/ai') ? 'active' : ''}>{t('ai')}</Link>
             <Link href="/services/business-consultant" className={pathname?.startsWith('/services') ? 'active' : ''}>{t('services')}</Link>
             <Link href="/startup-ecosystem" className={pathname?.startsWith('/startup-ecosystem') ? 'active' : ''}>{t('startupEcosystem')}</Link>
@@ -180,6 +181,7 @@ export function Navbar() {
               {isAuthenticated ? (
                 <>
                   <Link href="/dashboard" onClick={() => setMenuOpen(false)}>{t('dashboard')}</Link>
+                  <Link href="/meetings" onClick={() => setMenuOpen(false)} className={pathname?.startsWith('/meetings') ? 'active' : ''}>Meetings</Link>
                   {startupToolsEnabled && <Link href="/startup-workspace" onClick={() => setMenuOpen(false)}>{t('startupWorkspace')}</Link>}
                   <Link href="/profile" onClick={() => setMenuOpen(false)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <span className="avatar" style={{ width: 28, height: 28, fontSize: 12 }}>

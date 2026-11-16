@@ -385,6 +385,9 @@ export default function CourseDetailPage() {
                 <button className="btn course-action-button" style={{ width: '100%' }} onClick={() => router.push(`/ai-tutor?course=${course.id}`)}>
                   Ask the AI Tutor about this course
                 </button>
+                <button className="btn course-action-button" style={{ width: '100%', marginTop: 10 }} onClick={() => router.push(`/meetings?course=${course.id}`)}>
+                  Course meetings
+                </button>
                 {finalExam && enrollment.progress_percent >= 100 && (
                   <button
                     className="btn btn-accent course-action-button"

@@ -100,6 +100,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => router.push('/courses')}>{t('browseCourses')}</button>
+            <button className="btn" onClick={() => router.push('/meetings')}>Meetings</button>
             <button className="btn" onClick={() => router.push('/ai-tutor')}>{t('openAiTutor')}</button>
             {startupToolsEnabled && <button className="btn" onClick={() => router.push('/startup-workspace')}>{t('startupWorkspace')}</button>}
             <button className="btn" onClick={() => router.push('/profile')}>{t('profile')}</button>
@@ -121,7 +122,7 @@ export default function DashboardPage() {
           </div>
           <div className="card">
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('yourRole')}</p>
-            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{user?.role === 'instructor' ? t('instructor') : user?.role === 'super_admin' ? t('admin') : t('student')}</p>
+            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{user?.role === 'instructor' ? t('instructor') : user?.role === 'mentor' ? 'Mentor' : user?.role === 'super_admin' ? t('admin') : t('student')}</p>
           </div>
         </div>
       </div>

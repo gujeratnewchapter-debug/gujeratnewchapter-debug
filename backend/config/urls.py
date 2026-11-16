@@ -47,6 +47,7 @@ urlpatterns = [
     path('api/ai/', include('ai_tutor.urls')),
     path('api/', include('news.urls')),
     path('api/', include('site_settings.urls')),
+    path('api/', include('meetings.urls')),
     path('api/platform/', include('ess_platform.urls')),
     path('api/', include('feature_flags.urls')),
 ]

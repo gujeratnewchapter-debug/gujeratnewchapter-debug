@@ -1,0 +1,1 @@
+"""Meeting schema migrations."""
