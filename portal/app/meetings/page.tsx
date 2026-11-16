@@ -49,6 +49,8 @@ function MeetingsPageContent() {
   const searchParams = useSearchParams();
   const courseFilter = searchParams.get('course');
   const canHost = user?.role === 'instructor' || user?.role === 'mentor' || user?.role === 'super_admin';
+  const isStudent = user?.role === 'student';
+  const canSchedule = canHost || isStudent;
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,7 +128,7 @@ function MeetingsPageContent() {
         setActionError('Add a title and a valid start time.');
         return;
       }
-      const invitees = kind === 'consultation' ? [] : Array.from(new Set(
+      const invitees = Array.from(new Set(
         inviteeEmails.split(/[,\n;]/).map((email) => email.trim().toLowerCase()).filter(Boolean),
       ));
       if (invitees.length > 50) {
@@ -141,7 +143,7 @@ function MeetingsPageContent() {
         title: title.trim(),
         description: description.trim(),
         kind,
-        course: courseId ? Number(courseId) : null,
+        course: kind === 'consultation' ? null : courseId ? Number(courseId) : null,
         scheduled_start: start.toISOString(),
         scheduled_end: new Date(start.getTime() + 60 * 60 * 1000).toISOString(),
       });
@@ -221,7 +223,7 @@ function MeetingsPageContent() {
 
   const renderMeeting = (meeting: Meeting) => {
     const ownInvitation = meeting.invitations.find((invitation) => String(invitation.invited_user) === String(user?.id));
-    const pendingRequests = canHost && meeting.kind === 'consultation'
+    const pendingRequests = canHost && meeting.kind === 'consultation' && meeting.course !== null
       ? meeting.invitations.filter((invitation) => invitation.status === 'pending')
       : [];
     const isHost = String(meeting.host) === String(user?.id) || user?.role === 'super_admin';
@@ -293,7 +295,7 @@ function MeetingsPageContent() {
             <Link className={styles.joinButton} href={`/meetings/${meeting.id}`}>
               Join room <ArrowUpRight size={16} />
             </Link>
-          ) : ownInvitation?.status === 'pending' && meeting.kind !== 'consultation' && !isHost ? (
+          ) : ownInvitation?.status === 'pending' && !isHost ? (
             <button
               className={styles.openButton}
               disabled={acceptingId === meeting.id}
@@ -333,11 +335,14 @@ function MeetingsPageContent() {
         <div>
           <p className={styles.kicker}><Radio size={14} /> ESS LIVE LEARNING</p>
           <h1>Meetings</h1>
-          <p className={styles.intro}>Classrooms, working sessions, and one-to-one time with your mentors.</p>
+          <p className={styles.intro}>Book a private live call with an ESS admin, or join scheduled classes and group sessions.</p>
         </div>
-        {canHost && (
-          <button className={styles.scheduleButton} onClick={() => setShowScheduler((visible) => !visible)}>
-            <Plus size={17} /> Schedule a meeting
+        {canSchedule && (
+          <button className={styles.scheduleButton} onClick={() => {
+            if (isStudent) setKind('consultation');
+            setShowScheduler((visible) => !visible);
+          }}>
+            <Plus size={17} /> {isStudent ? 'Book an admin meeting' : 'Schedule a meeting'}
           </button>
         )}
       </header>
@@ -345,12 +350,12 @@ function MeetingsPageContent() {
       {actionError && <p className={styles.alert} role="alert">{actionError}</p>}
       {actionSuccess && <p className={styles.successNotice} role="status">{actionSuccess}</p>}
 
-      {showScheduler && canHost && (
+      {showScheduler && canSchedule && (
         <form className={styles.scheduler} onSubmit={submitMeeting}>
           <div className={styles.schedulerHeader}>
             <div>
-              <p className={styles.kicker}>NEW SESSION</p>
-              <h2>Put a time on the calendar</h2>
+              <p className={styles.kicker}>{isStudent ? 'PRIVATE ADMIN MEETING' : 'NEW SESSION'}</p>
+              <h2>{isStudent ? 'Book a live meeting with an ESS admin' : 'Put a time on the calendar'}</h2>
             </div>
             <button type="button" className={styles.closeScheduler} onClick={() => setShowScheduler(false)} aria-label="Close scheduler"><X size={18} /></button>
           </div>
@@ -359,21 +364,25 @@ function MeetingsPageContent() {
               Meeting title
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Week 3 — finding your first customers" required maxLength={255} />
             </label>
-            <label>
+            {canHost && <label>
               Session type
-              <select value={kind} onChange={(event) => setKind(event.target.value as MeetingKind)}>
+              <select value={kind} onChange={(event) => {
+                const nextKind = event.target.value as MeetingKind;
+                setKind(nextKind);
+                if (nextKind === 'consultation') setCourseId('');
+              }}>
                 <option value="classroom">Live classroom</option>
                 <option value="discussion">Group discussion</option>
                 <option value="consultation">Private consultation</option>
               </select>
-            </label>
-            <label>
+            </label>}
+            {kind !== 'consultation' && <label>
               Course <span className={styles.optional}>optional</span>
               <select value={courseId} onChange={(event) => setCourseId(event.target.value)}>
                 <option value="">Not linked to a course</option>
                 {courses.map((course) => <option value={course.id} key={course.id}>{course.title}</option>)}
               </select>
-            </label>
+            </label>}
             <label>
               Starts
               <input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} required />
@@ -382,7 +391,7 @@ function MeetingsPageContent() {
               What will you cover?
               <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} maxLength={2000} placeholder="Share a little context before everyone joins." />
             </label>
-            {kind !== 'consultation' && (
+            {canHost && (
               <label className={styles.fullWidth}>
                 Invite participants <span className={styles.optional}>optional · up to 50 emails</span>
                 <textarea
@@ -394,7 +403,9 @@ function MeetingsPageContent() {
                   aria-describedby="meeting-invite-hint"
                 />
                 <span className={styles.inviteHint} id="meeting-invite-hint">
-                  Invite registered ESS members by email. Course enrollment remains another way to join.
+                  {kind === 'consultation'
+                    ? 'Invite the student by email. They must accept before joining.'
+                    : 'Invite registered ESS members by email. Course enrollment remains another way to join.'}
                 </span>
               </label>
             )}
@@ -436,7 +447,10 @@ function MeetingsPageContent() {
                   <div className={styles.emptyIcon}><CalendarDays size={22} /></div>
                   <h2>Your next session starts here</h2>
                   <p>{canHost ? 'Schedule a classroom, discussion, or private consultation.' : 'New classes and mentor sessions will appear here.'}</p>
-                  {canHost && <button className={styles.openButton} onClick={() => setShowScheduler(true)}><Plus size={16} /> Create a session</button>}
+                  {canSchedule && <button className={styles.openButton} onClick={() => {
+                    if (isStudent) setKind('consultation');
+                    setShowScheduler(true);
+                  }}><Plus size={16} /> {isStudent ? 'Book an admin meeting' : 'Create a session'}</button>}
                   {!canHost && <Link className={styles.openButton} href="/courses">Explore courses <ArrowUpRight size={16} /></Link>}
                 </div>}
             </section>

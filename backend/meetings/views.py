@@ -67,7 +67,13 @@ class MeetingViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         user = request.user
         permitted_roles = {user.Role.INSTRUCTOR, user.Role.MENTOR, user.Role.SUPER_ADMIN}
-        if user.role not in permitted_roles:
+        is_student_consultation = (
+            user.role == user.Role.STUDENT
+            and request.data.get('kind') == Meeting.Kind.CONSULTATION
+        )
+        if is_student_consultation and request.data.get('course'):
+            return Response({'detail': 'Private admin meetings cannot be linked to a course.'}, status=400)
+        if user.role not in permitted_roles and not is_student_consultation:
             return Response({'detail': 'Only instructors, mentors, or admins may create meetings.'}, status=403)
         data = request.data.copy()
         data['host'] = user.id

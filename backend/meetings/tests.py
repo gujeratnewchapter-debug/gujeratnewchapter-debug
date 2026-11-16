@@ -245,6 +245,56 @@ class MeetingAuthorizationTests(APITestCase):
         self.assertTrue(created.room_name)
         self.assertTrue(MeetingParticipant.objects.filter(meeting=created, user=self.host, is_host=True).exists())
 
+    def test_student_can_book_private_meeting_for_admin_schedule(self):
+        admin = User.objects.create_user(
+            username='meeting-admin', email='admin@example.com', password='Password123!',
+            role=User.Role.SUPER_ADMIN,
+        )
+        self.client.force_authenticate(self.student)
+        response = self.client.post(self.list_url, {
+            'title': 'Talk with an ESS administrator',
+            'kind': Meeting.Kind.CONSULTATION,
+            'scheduled_start': (timezone.now() + timedelta(hours=2)).isoformat(),
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        meeting = Meeting.objects.get(id=response.data['id'])
+        self.assertEqual(meeting.host, self.student)
+        self.assertIsNone(meeting.course_id)
+        self.assertTrue(MeetingParticipant.objects.filter(meeting=meeting, user=self.student, is_host=True).exists())
+
+        self.client.force_authenticate(admin)
+        admin_schedule = self.client.get(self.list_url)
+        self.assertEqual(admin_schedule.status_code, 200)
+        self.assertIn(str(meeting.id), {item['id'] for item in admin_schedule.data})
+
+        start_response = self.client.post(reverse('meeting-start-meeting', args=[meeting.id]))
+        self.assertEqual(start_response.status_code, 200)
+        admin_join_response = self.client.post(reverse('meeting-join-meeting', args=[meeting.id]))
+        self.assertEqual(admin_join_response.status_code, 200)
+
+        self.client.force_authenticate(self.student)
+        join_response = self.client.post(reverse('meeting-join-meeting', args=[meeting.id]))
+        self.assertEqual(join_response.status_code, 200)
+
+    def test_student_cannot_create_non_consultation_or_course_meeting(self):
+        self.client.force_authenticate(self.student)
+        classroom_response = self.client.post(self.list_url, {
+            'title': 'Unauthorized classroom',
+            'kind': Meeting.Kind.CLASSROOM,
+        }, format='json')
+        course_consultation_response = self.client.post(self.list_url, {
+            'title': 'Course-linked private meeting',
+            'kind': Meeting.Kind.CONSULTATION,
+            'course': self.course.id,
+        }, format='json')
+
+        self.assertEqual(classroom_response.status_code, 403)
+        self.assertEqual(course_consultation_response.status_code, 400)
+        self.assertFalse(Meeting.objects.filter(title__in=[
+            'Unauthorized classroom', 'Course-linked private meeting',
+        ]).exists())
+
     def test_meeting_detail_includes_course_title_or_null(self):
         self.client.force_authenticate(self.host)
 
