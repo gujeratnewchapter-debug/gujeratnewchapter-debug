@@ -223,8 +223,34 @@ function MeetingsPageContent() {
     }
   }
 
-  if (isLoading || !isBackendAuthenticated) {
+  if (isLoading) {
     return <div className="container section"><InnovationLoader label="Loading meetings" /></div>;
+  }
+
+  if (!isBackendAuthenticated) {
+    return (
+      <div className={`container section ${styles.page}`}>
+        <header className={styles.pageHeader}>
+          <div>
+            <p className={styles.kicker}><Radio size={14} /> ESS LIVE LEARNING</p>
+            <h1>Meetings</h1>
+            <p className={styles.intro}>Sign in to view your schedule, book a consultation, or join a live meeting.</p>
+          </div>
+        </header>
+        <section className={styles.emptyState}>
+          <span className={styles.emptyIcon}><Headphones size={22} /></span>
+          <h2>Your meeting schedule is private</h2>
+          <p>Sign in with your Ethiopian Startup School account to access meetings available to you.</p>
+          <button
+            type="button"
+            className={styles.scheduleButton}
+            onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { returnTo: '/meetings' } }))}
+          >
+            Sign in to view meetings <ArrowUpRight size={16} />
+          </button>
+        </section>
+      </div>
+    );
   }
 
   const renderMeeting = (meeting: Meeting) => {
