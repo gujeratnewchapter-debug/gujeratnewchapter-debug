@@ -1,8 +1,10 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 import jwt
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -259,6 +261,16 @@ class MeetingAuthorizationTests(APITestCase):
         }, format='json')
 
         self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data['admin_notification_sent'])
+        self.assertEqual(len(mail.outbox), 1)
+        notification = mail.outbox[0]
+        self.assertIn('New student meeting request', notification.subject)
+        self.assertIn(self.student.email, notification.body)
+        self.assertIn('Talk with an ESS administrator', notification.body)
+        self.assertIn('/meetings', notification.body)
+        self.assertEqual(len(notification.alternatives), 1)
+        self.assertIn('Open meetings schedule', notification.alternatives[0][0])
+        self.assertIn('Ethiopian Startup School', notification.from_email)
         meeting = Meeting.objects.get(id=response.data['id'])
         self.assertEqual(meeting.host, self.student)
         self.assertIsNone(meeting.course_id)
@@ -295,6 +307,26 @@ class MeetingAuthorizationTests(APITestCase):
         self.assertFalse(Meeting.objects.filter(title__in=[
             'Unauthorized classroom', 'Course-linked private meeting',
         ]).exists())
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('meetings.emails.EmailMultiAlternatives.send', side_effect=OSError('SMTP unavailable'))
+    def test_student_booking_succeeds_when_admin_email_delivery_fails(self, _send_email):
+        User.objects.create_user(
+            username='meeting-admin-smtp-error', password='Password123!',
+            role=User.Role.SUPER_ADMIN, email='admin@example.com',
+        )
+        self.client.force_authenticate(self.student)
+
+        with self.assertLogs('meetings.emails', level='ERROR'):
+            response = self.client.post(self.list_url, {
+                'title': 'Admin email unavailable',
+                'kind': Meeting.Kind.CONSULTATION,
+                'scheduled_start': (timezone.now() + timedelta(hours=2)).isoformat(),
+            }, format='json')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertFalse(response.data['admin_notification_sent'])
+        self.assertTrue(Meeting.objects.filter(title='Admin email unavailable').exists())
 
     def test_meeting_detail_includes_course_title_or_null(self):
         self.client.force_authenticate(self.host)

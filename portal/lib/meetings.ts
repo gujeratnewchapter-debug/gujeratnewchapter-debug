@@ -38,6 +38,7 @@ export interface Meeting {
   ended_at: string | null;
   participants: MeetingParticipant[];
   invitations: MeetingInvitation[];
+  admin_notification_sent?: boolean;
 }
 
 export interface LiveKitToken {

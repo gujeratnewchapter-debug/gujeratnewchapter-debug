@@ -154,7 +154,13 @@ function MeetingsPageContent() {
       setDescription('');
       setInviteeEmails('');
       setShowScheduler(false);
-      if (invitees.length > 0) {
+      if (isStudent && kind === 'consultation') {
+        setActionSuccess(
+          meeting.admin_notification_sent
+            ? `Your meeting is booked for ${formatMeetingTime(meeting.scheduled_start)}. The ESS admin team has been notified by email.`
+            : `Your meeting is booked for ${formatMeetingTime(meeting.scheduled_start)}, but we could not email the admin team. Please contact ESS support.`,
+        );
+      } else if (invitees.length > 0) {
         try {
           const { data } = await inviteMeetingUsers(meeting.id, invitees);
           const invitationCount = Array.isArray(data?.invitations) ? data.invitations.length : invitees.length;

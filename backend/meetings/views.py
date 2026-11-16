@@ -83,6 +83,13 @@ class MeetingViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         meeting = serializer.save(host=user)
         MeetingParticipant.objects.get_or_create(meeting=meeting, user=user, defaults={'role': 'host', 'is_host': True})
+        if is_student_consultation:
+            from .emails import notify_admins_of_student_booking
+
+            admin_notification_sent = notify_admins_of_student_booking(meeting)
+            response_data = serializer.data
+            response_data['admin_notification_sent'] = bool(admin_notification_sent)
+            return Response(response_data, status=status.HTTP_201_CREATED)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def _can_join(self, meeting, user):
