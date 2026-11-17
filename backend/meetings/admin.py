@@ -138,7 +138,42 @@ class MeetingInvitationAdmin(admin.ModelAdmin):
     list_display = ('meeting', 'invited_user', 'status', 'created_at', 'updated_at')
     list_filter = ('status', 'created_at')
     search_fields = ('meeting__title', 'invited_user__username', 'invited_user__email')
-    readonly_fields = ('id', 'created_at', 'updated_at')
+    readonly_fields = ('id', 'meeting_link', 'created_at', 'updated_at')
+    actions = ('resend_selected_pending_invitations',)
+
+    @admin.display(description='Shareable meeting link')
+    def meeting_link(self, obj):
+        return MeetingAdmin(Meeting, admin.site).meeting_link(obj.meeting)
+
+    def save_model(self, request, obj, form, change):
+        should_send = obj.status == MeetingInvitation.Status.PENDING
+        if change and should_send:
+            previous_status = (
+                MeetingInvitation.objects
+                .filter(pk=obj.pk)
+                .values_list('status', flat=True)
+                .first()
+            )
+            should_send = previous_status != MeetingInvitation.Status.PENDING
+        super().save_model(request, obj, form, change)
+        if should_send:
+            MeetingAdmin(Meeting, admin.site)._email_invitations(
+                request,
+                obj.meeting,
+                [obj],
+            )
+
+    @admin.action(description='Resend selected pending meeting invitations')
+    def resend_selected_pending_invitations(self, request, queryset):
+        pending = queryset.filter(
+            status=MeetingInvitation.Status.PENDING,
+        ).select_related('meeting', 'invited_user')
+        invitations_by_meeting = {}
+        for invitation in pending:
+            invitations_by_meeting.setdefault(invitation.meeting, []).append(invitation)
+        meeting_admin = MeetingAdmin(Meeting, admin.site)
+        for meeting, invitations in invitations_by_meeting.items():
+            meeting_admin._email_invitations(request, meeting, invitations)
 
 
 @admin.register(MeetingSession)

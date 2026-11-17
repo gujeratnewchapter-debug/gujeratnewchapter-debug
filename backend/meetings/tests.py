@@ -760,3 +760,43 @@ class MeetingAdminTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(f'https://school.example/meetings/{meeting.pk}', mail.outbox[0].body)
         self.assertTrue(any('sent to 1 recipient' in str(message) for message in request._messages))
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_BASE_URL='https://school.example',
+    )
+    def test_standalone_invitation_admin_sends_link_only_on_pending_invitation(self):
+        admin_user = User.objects.create_superuser(
+            username='meeting-invitation-admin', email='invitation-admin@example.com',
+            password='Password123!',
+        )
+        student = User.objects.create_user(
+            username='meeting-invitation-student', email='invitation-student@example.com',
+            password='Password123!', role=User.Role.STUDENT,
+        )
+        meeting = Meeting.objects.create(
+            title='Standalone invitation',
+            host=admin_user,
+            room_name='standalone-invitation',
+            scheduled_start=timezone.now() + timedelta(hours=1),
+        )
+        request = RequestFactory().post('/admin/meetings/meetinginvitation/add/')
+        request.user = admin_user
+        request.session = {}
+        request._messages = FallbackStorage(request)
+        invitation_admin = admin.site._registry[MeetingInvitation]
+        invitation = MeetingInvitation(
+            meeting=meeting,
+            invited_user=student,
+            status=MeetingInvitation.Status.PENDING,
+        )
+
+        invitation_admin.save_model(request, invitation, form=None, change=False)
+        invitation_admin.save_model(request, invitation, form=None, change=True)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(f'https://school.example/meetings/{meeting.pk}', mail.outbox[0].body)
+        self.assertIn(
+            f'href="https://school.example/meetings/{meeting.pk}"',
+            str(invitation_admin.meeting_link(invitation)),
+        )
