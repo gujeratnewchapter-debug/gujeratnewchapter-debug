@@ -16,6 +16,7 @@ import {
   reviewConsultation,
   requestConsultation,
   getMeetingServiceStatus,
+  getMeetingEmailFailureAdvice,
 } from '@/lib/meetings';
 import { useAuth } from '@/lib/auth-context';
 import { InnovationLoader } from '@/components/InnovationLoader';
@@ -203,11 +204,9 @@ function MeetingsPageContent() {
           } else {
             const sent = Number(emailDelivery?.sent) || 0;
             const failed = Number(emailDelivery?.failed) || invitationCount;
-            const cause = emailDelivery?.configured
-              ? `Email delivery failed for ${failed} invitee${failed === 1 ? '' : 's'}.`
-              : 'The backend email service is not configured for delivery.';
+            const cause = `Email delivery failed for ${failed} invitee${failed === 1 ? '' : 's'}. ${getMeetingEmailFailureAdvice(emailDelivery?.error)}`;
             setActionError(
-              `"${meeting.title}" was scheduled and access was prepared, but ${cause} Configure the backend SMTP email settings before inviting students.`,
+              `"${meeting.title}" was scheduled and access was prepared, but ${cause}`,
             );
             if (sent > 0) {
               setActionSuccess(`The email server accepted ${sent} invitation${sent === 1 ? '' : 's'}; inbox delivery is not confirmed.`);

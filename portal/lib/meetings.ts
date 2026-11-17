@@ -61,6 +61,44 @@ export interface MeetingServiceStatus {
   };
 }
 
+export type MeetingEmailFailure =
+  | 'authentication_failed'
+  | 'connection_failed'
+  | 'timeout'
+  | 'recipient_rejected'
+  | 'message_rejected'
+  | 'missing_recipient_email'
+  | 'not_configured'
+  | 'configuration_error'
+  | 'smtp_error'
+  | 'unknown'
+  | null;
+
+export function getMeetingEmailFailureAdvice(error: MeetingEmailFailure | undefined): string {
+  switch (error) {
+    case 'authentication_failed':
+      return 'SMTP rejected the username or password. Verify the backend email username and password.';
+    case 'connection_failed':
+      return 'The backend could not connect to SMTP. Verify the mail host, port, TLS settings, and provider network restrictions.';
+    case 'timeout':
+      return 'The SMTP server did not respond in time. Verify the mail host and port and check the provider status.';
+    case 'recipient_rejected':
+      return 'The SMTP server rejected the recipient address. Verify the student email and provider recipient policies.';
+    case 'message_rejected':
+      return 'The SMTP server rejected the message. Verify the sender address and sender-domain authorization.';
+    case 'missing_recipient_email':
+      return 'The invited student account does not have an email address.';
+    case 'not_configured':
+      return 'The backend email service is not configured for SMTP delivery.';
+    case 'configuration_error':
+      return 'The backend email service configuration is invalid. Verify the configured mail backend.';
+    case 'smtp_error':
+      return 'The SMTP server rejected the request. Check the backend email logs and provider settings.';
+    default:
+      return 'Check the backend email logs for the delivery error.';
+  }
+}
+
 const collection = '/meetings/';
 
 export const getMeetings = (params?: Record<string, string | number>) =>

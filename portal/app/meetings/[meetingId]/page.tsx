@@ -34,6 +34,7 @@ import {
   endMeeting,
   getMeeting,
   getMeetingToken,
+  getMeetingEmailFailureAdvice,
   inviteMeetingUsers,
   joinMeeting,
   leaveMeeting,
@@ -597,9 +598,7 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
         setInviteNotice(`The email server accepted ${delivery.sent} invitation${delivery.sent === 1 ? '' : 's'}. This does not guarantee inbox delivery; ask invitees to check Spam/Junk.`);
       } else {
         setInviteError(
-          delivery?.configured
-            ? `Invitations were saved, but email delivery failed for ${delivery.failed || emails.length} recipient${(delivery.failed || emails.length) === 1 ? '' : 's'}. Check the backend SMTP settings.`
-            : 'Invitations were saved, but the backend email service is not configured to send email.',
+          `Invitations were saved, but email delivery failed for ${delivery.failed || emails.length} recipient${(delivery.failed || emails.length) === 1 ? '' : 's'}. ${getMeetingEmailFailureAdvice(delivery?.error)}`,
         );
       }
       setInviteEmails('');

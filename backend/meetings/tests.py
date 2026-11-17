@@ -431,6 +431,7 @@ class MeetingAuthorizationTests(APITestCase):
             'sent': 1,
             'failed': 0,
             'configured': True,
+            'error': None,
         })
         self.assertIn(f'/meetings/{course_meeting.id}', mail.outbox[-1].body)
 
@@ -582,6 +583,7 @@ class MeetingAuthorizationTests(APITestCase):
             'sent': 1,
             'failed': 0,
             'configured': True,
+            'error': None,
         })
         self.assertIn(f'/meetings/{self.meeting.id}', mail.outbox[0].body)
         invitation = MeetingInvitation.objects.get(meeting=self.meeting, invited_user=self.other_student)
@@ -613,6 +615,7 @@ class MeetingAuthorizationTests(APITestCase):
             'sent': 0,
             'failed': 1,
             'configured': True,
+            'error': 'connection_failed',
         })
         self.assertTrue(MeetingInvitation.objects.filter(
             meeting=self.meeting,
@@ -635,7 +638,34 @@ class MeetingAuthorizationTests(APITestCase):
             'sent': 0,
             'failed': 1,
             'configured': False,
+            'error': 'not_configured',
         })
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend')
+    @patch('meetings.emails.get_connection')
+    def test_invitation_reports_smtp_authentication_failure_without_exposing_credentials(
+        self, get_connection_mock,
+    ):
+        get_connection_mock.return_value.open.side_effect = smtplib.SMTPAuthenticationError(
+            535, b'authentication failed'
+        )
+        self.client.force_authenticate(self.host)
+
+        with self.assertLogs('meetings.emails', level='ERROR'):
+            response = self.client.post(
+                reverse('meeting-invite-users', args=[self.meeting.id]),
+                {'emails': [self.other_student.email]},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['email_delivery'], {
+            'sent': 0,
+            'failed': 1,
+            'configured': True,
+            'error': 'authentication_failed',
+        })
+        self.assertNotIn('authentication failed', str(response.data))
 
     def test_host_invite_reports_unknown_email_instead_of_silently_skipping(self):
         self.client.force_authenticate(self.host)

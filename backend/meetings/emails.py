@@ -1,10 +1,12 @@
 import logging
 import smtplib
+import socket
 from html import escape
 from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models import Q
 from django.utils import timezone
@@ -14,13 +16,34 @@ from site_settings.models import SiteSettings
 logger = logging.getLogger(__name__)
 
 
+def _email_failure_code(error):
+    if isinstance(error, smtplib.SMTPAuthenticationError):
+        return 'authentication_failed'
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return 'recipient_rejected'
+    if isinstance(error, smtplib.SMTPDataError):
+        return 'message_rejected'
+    if isinstance(error, (socket.timeout, TimeoutError)):
+        return 'timeout'
+    if isinstance(error, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected, OSError)):
+        return 'connection_failed'
+    if isinstance(error, smtplib.SMTPException):
+        return 'smtp_error'
+    return 'unknown'
+
+
 def send_meeting_invitations(meeting, invitees, require_acceptance=True):
     if settings.EMAIL_BACKEND.endswith('.console.EmailBackend'):
         logger.warning(
             'Meeting invitations for %s were not emailed because the console email backend is configured.',
             meeting.pk,
         )
-        return {'sent': 0, 'failed': len(invitees), 'configured': False}
+        return {
+            'sent': 0,
+            'failed': len(invitees),
+            'configured': False,
+            'error': 'not_configured',
+        }
 
     site = SiteSettings.load()
     school_name = site.school_name
@@ -38,20 +61,36 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
     kind_label = meeting.get_kind_display()
     sent = 0
     failed = 0
-    connection = get_connection(
-        fail_silently=False,
-        timeout=min(settings.EMAIL_TIMEOUT, 10),
-    )
+    error_code = None
+    try:
+        connection = get_connection(
+            fail_silently=False,
+            timeout=min(settings.EMAIL_TIMEOUT, 10),
+        )
+    except (ImproperlyConfigured, ValueError):
+        logger.exception('Could not configure the email connection for meeting %s.', meeting.pk)
+        return {
+            'sent': 0,
+            'failed': len(invitees),
+            'configured': False,
+            'error': 'configuration_error',
+        }
     try:
         connection.open()
-    except (OSError, smtplib.SMTPException):
+    except (OSError, smtplib.SMTPException) as error:
         logger.exception('Could not open the email connection for meeting %s.', meeting.pk)
-        return {'sent': 0, 'failed': len(invitees), 'configured': True}
+        return {
+            'sent': 0,
+            'failed': len(invitees),
+            'configured': True,
+            'error': _email_failure_code(error),
+        }
 
     try:
         for invitee in invitees:
             if not invitee.email:
                 failed += 1
+                error_code = error_code or 'missing_recipient_email'
                 logger.warning(
                     'Cannot send meeting invitation for meeting %s because an invitee has no email address.',
                     meeting.pk,
@@ -112,8 +151,10 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
                 sent += delivered
                 if not delivered:
                     failed += 1
-            except (OSError, smtplib.SMTPException):
+                    error_code = error_code or 'message_rejected'
+            except (OSError, smtplib.SMTPException) as error:
                 failed += 1
+                error_code = error_code or _email_failure_code(error)
                 logger.exception(
                     'Failed to send meeting invitation for meeting %s to an invitee.',
                     meeting.pk,
@@ -124,7 +165,12 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
         except (OSError, smtplib.SMTPException):
             logger.exception('Could not close the email connection for meeting %s.', meeting.pk)
 
-    return {'sent': sent, 'failed': failed, 'configured': True}
+    return {
+        'sent': sent,
+        'failed': failed,
+        'configured': True,
+        'error': error_code,
+    }
 
 
 def notify_admins_of_student_booking(meeting):

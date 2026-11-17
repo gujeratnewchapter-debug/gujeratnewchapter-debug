@@ -19,6 +19,23 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+EMAIL_FAILURE_ADVICE = {
+    'authentication_failed': 'SMTP rejected the username or password; verify EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in the backend service settings.',
+    'connection_failed': 'The backend could not connect to the SMTP server; verify EMAIL_HOST, EMAIL_PORT, TLS settings, and provider network restrictions.',
+    'timeout': 'The SMTP server did not respond in time; verify the host and port and check the email provider status.',
+    'recipient_rejected': 'The SMTP server rejected the recipient address; verify the student email and the provider’s recipient policies.',
+    'message_rejected': 'The SMTP server rejected the message; verify DEFAULT_FROM_EMAIL and the sender domain’s authorization.',
+    'missing_recipient_email': 'The invited student account does not have an email address.',
+    'not_configured': 'The backend is using a non-SMTP or unconfigured email backend.',
+    'configuration_error': 'The backend email service configuration is invalid; verify the email backend settings.',
+    'smtp_error': 'The SMTP server rejected the request; check the backend email logs and provider settings.',
+    'unknown': 'Check the backend email logs for the delivery error.',
+}
+
+
+def _email_failure_advice(error_code):
+    return EMAIL_FAILURE_ADVICE.get(error_code, EMAIL_FAILURE_ADVICE['unknown'])
+
 
 class MeetingParticipantInline(admin.TabularInline):
     model = MeetingParticipant
@@ -104,7 +121,7 @@ class MeetingAdmin(admin.ModelAdmin):
             logger.exception('Could not prepare or send invitations for meeting %s.', meeting.pk)
             self.message_user(
                 request,
-                'The invitation was saved, but its email could not be sent. Check the backend email configuration and retry.',
+                'The invitation was saved, but its email could not be sent. Check the backend email settings and logs.',
                 level=messages.ERROR,
             )
             return
@@ -121,7 +138,8 @@ class MeetingAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f'Invitation email failed for {failed} recipient{"s" if failed != 1 else ""}. '
-                'Check the recipient address and SMTP configuration, then retry from the pending invitation action.',
+                f'{_email_failure_advice(result.get("error"))} '
+                'Retry from the pending invitation action after correcting the issue.',
                 level=messages.ERROR,
             )
 
@@ -129,6 +147,7 @@ class MeetingAdmin(admin.ModelAdmin):
     def resend_pending_invitations(self, request, queryset):
         sent = 0
         failed = 0
+        error_codes = set()
         for meeting in queryset:
             invitations = list(
                 meeting.invitations
@@ -145,6 +164,8 @@ class MeetingAdmin(admin.ModelAdmin):
             )
             sent += result['sent']
             failed += result['failed']
+            if result.get('error'):
+                error_codes.add(result['error'])
         if sent:
             self.message_user(
                 request,
@@ -156,7 +177,8 @@ class MeetingAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f'Invitation email failed for {failed} recipient{"s" if failed != 1 else ""}. '
-                'Check the recipient address and SMTP configuration, then retry from the pending invitation action.',
+                f'{_email_failure_advice(next(iter(error_codes), None))} '
+                'Retry from the pending invitation action after correcting the issue.',
                 level=messages.ERROR,
             )
 
