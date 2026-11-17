@@ -77,8 +77,8 @@ export const joinMeeting = (meetingId: string) =>
 export const leaveMeeting = (meetingId: string) =>
   apiClient.post(`${collection}${meetingId}/leave/`);
 
-export const inviteMeetingUsers = (meetingId: string, emails: string[]) =>
-  apiClient.post(`${collection}${meetingId}/invite/`, { emails });
+export const inviteMeetingUsers = (meetingId: string, emails: string[], studentOnly = false) =>
+  apiClient.post(`${collection}${meetingId}/invite/`, { emails, student_only: studentOnly });
 
 export const getMeetingToken = (meetingId: string) =>
   apiClient.get<LiveKitToken>(`/meetings/${meetingId}/token/`);

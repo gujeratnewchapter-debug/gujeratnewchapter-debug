@@ -248,6 +248,81 @@ class MeetingAuthorizationTests(APITestCase):
         self.assertTrue(created.room_name)
         self.assertTrue(MeetingParticipant.objects.filter(meeting=created, user=self.host, is_host=True).exists())
 
+    def test_admin_can_schedule_individual_group_and_course_meetings(self):
+        admin = User.objects.create_user(
+            username='meeting-audience-admin', email='audience-admin@example.com',
+            password='Password123!', role=User.Role.SUPER_ADMIN,
+        )
+        group_student = User.objects.create_user(
+            username='meeting-group-student', email='group-student@example.com',
+            password='Password123!', role=User.Role.STUDENT,
+        )
+        self.client.force_authenticate(admin)
+
+        individual_response = self.client.post(self.list_url, {
+            'title': 'Individual student session',
+            'kind': Meeting.Kind.CONSULTATION,
+            'scheduled_start': (timezone.now() + timedelta(hours=2)).isoformat(),
+        }, format='json')
+        self.assertEqual(individual_response.status_code, 201, individual_response.data)
+        individual = Meeting.objects.get(id=individual_response.data['id'])
+        individual_invites = self.client.post(
+            reverse('meeting-invite-users', args=[individual.id]),
+            {'emails': [self.student.email], 'student_only': True},
+            format='json',
+        )
+        self.assertEqual(individual_invites.status_code, 200, individual_invites.data)
+        self.assertEqual(
+            list(individual.invitations.values_list('invited_user__email', flat=True)),
+            [self.student.email],
+        )
+
+        group_response = self.client.post(self.list_url, {
+            'title': 'Selected student group session',
+            'kind': Meeting.Kind.DISCUSSION,
+            'scheduled_start': (timezone.now() + timedelta(hours=3)).isoformat(),
+        }, format='json')
+        self.assertEqual(group_response.status_code, 201, group_response.data)
+        group = Meeting.objects.get(id=group_response.data['id'])
+        group_invites = self.client.post(
+            reverse('meeting-invite-users', args=[group.id]),
+            {'emails': [self.student.email, group_student.email], 'student_only': True},
+            format='json',
+        )
+        self.assertEqual(group_invites.status_code, 200, group_invites.data)
+        self.assertEqual(group.invitations.count(), 2)
+        invalid_group_invites = self.client.post(
+            reverse('meeting-invite-users', args=[group.id]),
+            {'emails': [self.host.email], 'student_only': True},
+            format='json',
+        )
+        self.assertEqual(invalid_group_invites.status_code, 400)
+        self.assertEqual(group.invitations.count(), 2)
+
+        course_response = self.client.post(self.list_url, {
+            'course': self.course.id,
+            'title': 'Course student classroom',
+            'kind': Meeting.Kind.CLASSROOM,
+            'scheduled_start': (timezone.now() + timedelta(hours=4)).isoformat(),
+        }, format='json')
+        self.assertEqual(course_response.status_code, 201, course_response.data)
+        course_meeting = Meeting.objects.get(id=course_response.data['id'])
+
+        self.client.force_authenticate(self.student)
+        self.assertIn(
+            str(course_meeting.id),
+            {item['id'] for item in self.client.get(self.list_url).data},
+        )
+        self.assertEqual(
+            self.client.post(reverse('meeting-join-meeting', args=[course_meeting.id])).status_code,
+            200,
+        )
+        self.client.force_authenticate(group_student)
+        self.assertIn(
+            str(group.id),
+            {item['id'] for item in self.client.get(self.list_url).data},
+        )
+
     def test_student_can_book_private_meeting_for_admin_schedule(self):
         admin = User.objects.create_user(
             username='meeting-admin', email='admin@example.com', password='Password123!',

@@ -20,6 +20,7 @@ import { InnovationLoader } from '@/components/InnovationLoader';
 import styles from './meetings.module.css';
 
 type CourseOption = { id: number; title: string };
+type MeetingAudience = 'individual' | 'group' | 'course';
 
 function listFromResponse<T>(data: any): T[] {
   return data?.results ?? data ?? [];
@@ -49,6 +50,7 @@ function MeetingsPageContent() {
   const searchParams = useSearchParams();
   const courseFilter = searchParams.get('course');
   const canHost = user?.role === 'instructor' || user?.role === 'mentor' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'super_admin';
   const isStudent = user?.role === 'student';
   const canSchedule = canHost || isStudent;
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -64,6 +66,7 @@ function MeetingsPageContent() {
   const [showScheduler, setShowScheduler] = useState(false);
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<MeetingKind>('classroom');
+  const [meetingAudience, setMeetingAudience] = useState<MeetingAudience>('individual');
   const [courseId, setCourseId] = useState(courseFilter ?? '');
   const [startTime, setStartTime] = useState(() => localDateTimeValue(new Date(Date.now() + 60 * 60 * 1000)));
   const [description, setDescription] = useState('');
@@ -131,6 +134,18 @@ function MeetingsPageContent() {
       const invitees = Array.from(new Set(
         inviteeEmails.split(/[,\n;]/).map((email) => email.trim().toLowerCase()).filter(Boolean),
       ));
+      if (isAdmin && meetingAudience === 'individual' && invitees.length !== 1) {
+        setActionError('Enter exactly one registered student email for an individual meeting.');
+        return;
+      }
+      if (isAdmin && meetingAudience === 'group' && invitees.length === 0) {
+        setActionError('Enter at least one registered student email for a group meeting.');
+        return;
+      }
+      if (isAdmin && meetingAudience === 'course' && !courseId) {
+        setActionError('Select a course to invite its enrolled students.');
+        return;
+      }
       if (invitees.length > 50) {
         setActionError('You can invite up to 50 people to a meeting.');
         return;
@@ -139,11 +154,18 @@ function MeetingsPageContent() {
         setActionError('Check the invitee email addresses and try again.');
         return;
       }
+      const meetingKind: MeetingKind = isAdmin
+        ? meetingAudience === 'individual'
+          ? 'consultation'
+          : meetingAudience === 'group'
+            ? 'discussion'
+            : 'classroom'
+        : kind;
       const { data: meeting } = await createMeeting({
         title: title.trim(),
         description: description.trim(),
-        kind,
-        course: kind === 'consultation' ? null : courseId ? Number(courseId) : null,
+        kind: meetingKind,
+        course: meetingKind === 'consultation' ? null : courseId ? Number(courseId) : null,
         scheduled_start: start.toISOString(),
         scheduled_end: new Date(start.getTime() + 60 * 60 * 1000).toISOString(),
       });
@@ -162,10 +184,10 @@ function MeetingsPageContent() {
         );
       } else if (invitees.length > 0) {
         try {
-          const { data } = await inviteMeetingUsers(meeting.id, invitees);
+          const { data } = await inviteMeetingUsers(meeting.id, invitees, isAdmin);
           const invitationCount = Array.isArray(data?.invitations) ? data.invitations.length : invitees.length;
           setActionSuccess(
-            `"${meeting.title}" scheduled; ${invitationCount} invitation${invitationCount === 1 ? '' : 's'} sent.`,
+            `"${meeting.title}" scheduled; ${invitationCount} student${invitationCount === 1 ? '' : 's'} invited. They can accept from their ESS meetings schedule.`,
           );
           await loadMeetings();
         } catch (inviteError: any) {
@@ -397,21 +419,45 @@ function MeetingsPageContent() {
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Week 3 — finding your first customers" required maxLength={255} />
             </label>
             {canHost && <label>
-              Session type
-              <select value={kind} onChange={(event) => {
-                const nextKind = event.target.value as MeetingKind;
-                setKind(nextKind);
-                if (nextKind === 'consultation') setCourseId('');
-              }}>
-                <option value="classroom">Live classroom</option>
-                <option value="discussion">Group discussion</option>
-                <option value="consultation">Private consultation</option>
-              </select>
+              {isAdmin ? 'Who should attend?' : 'Session type'}
+              {isAdmin ? (
+                <select
+                  value={meetingAudience}
+                  onChange={(event) => {
+                    const nextAudience = event.target.value as MeetingAudience;
+                    setMeetingAudience(nextAudience);
+                    setInviteeEmails('');
+                    setCourseId('');
+                    setKind(
+                      nextAudience === 'individual'
+                        ? 'consultation'
+                        : nextAudience === 'group'
+                          ? 'discussion'
+                          : 'classroom',
+                    );
+                  }}
+                >
+                  <option value="individual">One student</option>
+                  <option value="group">Selected students by email</option>
+                  <option value="course">All enrolled students in a course</option>
+                </select>
+              ) : (
+                <select value={kind} onChange={(event) => {
+                  const nextKind = event.target.value as MeetingKind;
+                  setKind(nextKind);
+                  if (nextKind === 'consultation') setCourseId('');
+                }}>
+                  <option value="classroom">Live classroom</option>
+                  <option value="discussion">Group discussion</option>
+                  <option value="consultation">Private consultation</option>
+                </select>
+              )}
             </label>}
-            {kind !== 'consultation' && <label>
-              Course <span className={styles.optional}>optional</span>
+            {(isAdmin ? meetingAudience === 'course' : kind !== 'consultation') && <label>
+              Course {!isAdmin && <span className={styles.optional}>optional</span>}
               <select value={courseId} onChange={(event) => setCourseId(event.target.value)}>
-                <option value="">Not linked to a course</option>
+                {!isAdmin && <option value="">Not linked to a course</option>}
+                {isAdmin && <option value="">Select a course</option>}
                 {courses.map((course) => <option value={course.id} key={course.id}>{course.title}</option>)}
               </select>
             </label>}
@@ -423,23 +469,38 @@ function MeetingsPageContent() {
               What will you cover?
               <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} maxLength={2000} placeholder="Share a little context before everyone joins." />
             </label>
-            {canHost && (
+            {canHost && (isAdmin ? meetingAudience !== 'course' : true) && (
               <label className={styles.fullWidth}>
-                Invite participants <span className={styles.optional}>optional · up to 50 emails</span>
+                {isAdmin
+                  ? meetingAudience === 'individual' ? 'Student email' : 'Student email addresses'
+                  : 'Invite participants'}
+                {!isAdmin && <span className={styles.optional}>optional · up to 50 emails</span>}
                 <textarea
                   value={inviteeEmails}
                   onChange={(event) => setInviteeEmails(event.target.value)}
-                  rows={2}
+                  rows={isAdmin && meetingAudience === 'individual' ? 1 : 2}
                   maxLength={4000}
-                  placeholder="learner@example.com, teammate@example.com"
+                  placeholder={isAdmin && meetingAudience === 'individual'
+                    ? 'student@example.com'
+                    : 'student1@example.com, student2@example.com'}
+                  required={isAdmin}
                   aria-describedby="meeting-invite-hint"
                 />
                 <span className={styles.inviteHint} id="meeting-invite-hint">
-                  {kind === 'consultation'
-                    ? 'Invite the student by email. They must accept before joining.'
-                    : 'Invite registered ESS members by email. Course enrollment remains another way to join.'}
+                  {isAdmin
+                    ? meetingAudience === 'individual'
+                      ? 'The address must belong to a registered student. They must accept the invitation before joining.'
+                      : 'Enter registered student email addresses, separated by commas or new lines. Each student must accept before joining.'
+                    : kind === 'consultation'
+                      ? 'Invite the student by email. They must accept before joining.'
+                      : 'Invite registered ESS members by email. Course enrollment remains another way to join.'}
                 </span>
               </label>
+            )}
+            {isAdmin && meetingAudience === 'course' && (
+              <p className={styles.inviteHint}>
+                All students enrolled in the selected course can see and join this classroom meeting.
+              </p>
             )}
           </div>
           {actionError && <p className={styles.formError} role="alert">{actionError}</p>}

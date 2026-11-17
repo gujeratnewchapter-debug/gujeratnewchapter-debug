@@ -167,6 +167,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
         invited_emails = request.data.get('emails', [])
         if isinstance(invited_emails, str):
             invited_emails = invited_emails.split(',')
+        student_only = request.data.get('student_only') is True
+        if student_only and not request.user.is_super_admin:
+            return Response({'detail': 'Only administrators can create student-only invitations.'}, status=403)
         if not isinstance(invited_user_ids, (list, tuple)) or not isinstance(invited_emails, (list, tuple)):
             return Response({'detail': 'Provide user_ids and emails as lists.'}, status=400)
         if any(not isinstance(email, str) for email in invited_emails):
@@ -179,6 +182,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
         missing_ids = []
         for user_id in invited_user_ids:
             invitee = User.objects.filter(id=user_id, is_active=True).first()
+            if student_only and invitee and invitee.role != User.Role.STUDENT:
+                invitee = None
             if not invitee:
                 missing_ids.append(str(user_id))
             else:
@@ -192,6 +197,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
         missing_emails = []
         for email in normalized_emails:
             invitee = User.objects.filter(email__iexact=email, is_active=True).first()
+            if student_only and invitee and invitee.role != User.Role.STUDENT:
+                invitee = None
             if not invitee:
                 missing_emails.append(email)
             else:
