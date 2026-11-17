@@ -29,7 +29,7 @@ class MeetingInvitationInline(admin.TabularInline):
 
 @admin.register(Meeting)
 class MeetingAdmin(admin.ModelAdmin):
-    list_display = ('title', 'kind', 'status', 'host', 'scheduled_start', 'course')
+    list_display = ('title', 'kind', 'status', 'host', 'scheduled_start', 'course', 'open_meeting')
     list_filter = ('kind', 'status', 'scheduled_start')
     search_fields = ('title', 'description', 'host__username', 'host__email', 'participants__user__email')
     readonly_fields = ('id', 'room_name', 'meeting_link', 'started_at', 'ended_at', 'created_at', 'updated_at')
@@ -43,6 +43,18 @@ class MeetingAdmin(admin.ModelAdmin):
             return 'Save the meeting to create its link.'
         url = f'{settings.FRONTEND_BASE_URL.rstrip("/")}/meetings/{obj.pk}'
         return format_html('<a href="{0}" target="_blank" rel="noopener noreferrer">{0}</a>', url)
+
+    @admin.display(description='Live meeting')
+    def open_meeting(self, obj):
+        if obj.status not in {Meeting.Status.SCHEDULED, Meeting.Status.LIVE}:
+            return '—'
+        url = f'{settings.FRONTEND_BASE_URL.rstrip("/")}/meetings/{obj.pk}'
+        label = 'Join call' if obj.status == Meeting.Status.LIVE else 'Open / start call'
+        return format_html(
+            '<a href="{0}" target="_blank" rel="noopener noreferrer">{1}</a>',
+            url,
+            label,
+        )
 
     def save_model(self, request, obj, form, change):
         if not obj.room_name:
@@ -80,14 +92,15 @@ class MeetingAdmin(admin.ModelAdmin):
         if sent:
             self.message_user(
                 request,
-                f'Meeting invitation sent to {sent} recipient{"s" if sent != 1 else ""}.',
+                f'Email server accepted the meeting invitation for {sent} recipient{"s" if sent != 1 else ""}. '
+                'This confirms SMTP handoff, not inbox delivery; ask the recipient to check Spam/Junk if it is missing.',
                 level=messages.SUCCESS,
             )
         if failed or not result['configured']:
             self.message_user(
                 request,
                 f'Invitation email failed for {failed} recipient{"s" if failed != 1 else ""}. '
-                'Check the SMTP configuration and Render application logs.',
+                'Check the recipient address and SMTP configuration, then retry from the pending invitation action.',
                 level=messages.ERROR,
             )
 
@@ -114,14 +127,15 @@ class MeetingAdmin(admin.ModelAdmin):
         if sent:
             self.message_user(
                 request,
-                f'Meeting invitation sent to {sent} recipient{"s" if sent != 1 else ""}.',
+                f'Email server accepted the meeting invitation for {sent} recipient{"s" if sent != 1 else ""}. '
+                'This confirms SMTP handoff, not inbox delivery; ask the recipient to check Spam/Junk if it is missing.',
                 level=messages.SUCCESS,
             )
         if failed:
             self.message_user(
                 request,
                 f'Invitation email failed for {failed} recipient{"s" if failed != 1 else ""}. '
-                'Check the SMTP configuration and Render application logs.',
+                'Check the recipient address and SMTP configuration, then retry from the pending invitation action.',
                 level=messages.ERROR,
             )
 
@@ -146,17 +160,8 @@ class MeetingInvitationAdmin(admin.ModelAdmin):
         return MeetingAdmin(Meeting, admin.site).meeting_link(obj.meeting)
 
     def save_model(self, request, obj, form, change):
-        should_send = obj.status == MeetingInvitation.Status.PENDING
-        if change and should_send:
-            previous_status = (
-                MeetingInvitation.objects
-                .filter(pk=obj.pk)
-                .values_list('status', flat=True)
-                .first()
-            )
-            should_send = previous_status != MeetingInvitation.Status.PENDING
         super().save_model(request, obj, form, change)
-        if should_send:
+        if obj.status == MeetingInvitation.Status.PENDING:
             MeetingAdmin(Meeting, admin.site)._email_invitations(
                 request,
                 obj.meeting,

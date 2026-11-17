@@ -99,6 +99,9 @@ class MeetingInvitation(models.Model):
     class Meta:
         unique_together = ('meeting', 'invited_user')
 
+    def __str__(self):
+        return f'{self.invited_user} invited to {self.meeting}'
+
 
 class MeetingSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

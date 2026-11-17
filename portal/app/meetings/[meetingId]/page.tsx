@@ -594,7 +594,7 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
       const { data } = await inviteMeetingUsers(meetingId, emails);
       const delivery = data.email_delivery;
       if (delivery?.configured && delivery.sent === emails.length && delivery.failed === 0) {
-        setInviteNotice(`${delivery.sent} invitation email${delivery.sent === 1 ? '' : 's'} sent. Invitees can open the link, accept, and join when the room is live.`);
+        setInviteNotice(`The email server accepted ${delivery.sent} invitation${delivery.sent === 1 ? '' : 's'}. This does not guarantee inbox delivery; ask invitees to check Spam/Junk.`);
       } else {
         setInviteError(
           delivery?.configured

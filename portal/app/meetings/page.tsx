@@ -197,8 +197,8 @@ function MeetingsPageContent() {
           if (emailDelivery?.configured && emailDelivery.sent === invitationCount && emailDelivery.failed === 0) {
             setActionSuccess(
               courseStudents
-                ? `"${meeting.title}" scheduled and emailed to ${invitationCount} enrolled student${invitationCount === 1 ? '' : 's'}. They can join from the link when you start the room.`
-                : `"${meeting.title}" scheduled and emailed to ${emailDelivery.sent} student${emailDelivery.sent === 1 ? '' : 's'}. They can accept the invitation from its link and join when you start the room.`,
+                ? `"${meeting.title}" scheduled. The email server accepted invitations for ${invitationCount} enrolled student${invitationCount === 1 ? '' : 's'}; this does not guarantee inbox delivery.`
+                : `"${meeting.title}" scheduled. The email server accepted invitations for ${emailDelivery.sent} student${emailDelivery.sent === 1 ? '' : 's'}; this does not guarantee inbox delivery.`,
             );
           } else {
             const sent = Number(emailDelivery?.sent) || 0;
@@ -210,7 +210,7 @@ function MeetingsPageContent() {
               `"${meeting.title}" was scheduled and access was prepared, but ${cause} Configure the backend SMTP email settings before inviting students.`,
             );
             if (sent > 0) {
-              setActionSuccess(`Invitation email sent to ${sent} student${sent === 1 ? '' : 's'}.`);
+              setActionSuccess(`The email server accepted ${sent} invitation${sent === 1 ? '' : 's'}; inbox delivery is not confirmed.`);
             }
           }
           await loadMeetings();
@@ -412,7 +412,7 @@ function MeetingsPageContent() {
             </button>
           ) : meeting.status === 'scheduled' && isHost ? (
             <Link className={styles.openButton} href={`/meetings/${meeting.id}`}>
-              Open room <ArrowUpRight size={16} />
+              Start call <ArrowUpRight size={16} />
             </Link>
           ) : canRequest ? (
             <button

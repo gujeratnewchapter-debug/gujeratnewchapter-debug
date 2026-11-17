@@ -706,7 +706,7 @@ class MeetingAdminTests(TestCase):
         )
         self.assertIn('Open meeting', mail.outbox[0].alternatives[0][0])
         messages = list(request._messages)
-        self.assertTrue(any('sent to 1 recipient' in str(message) for message in messages))
+        self.assertTrue(any('SMTP handoff' in str(message) for message in messages))
 
     @override_settings(FRONTEND_BASE_URL='https://school.example')
     def test_admin_exposes_shareable_link_for_existing_meeting(self):
@@ -721,8 +721,10 @@ class MeetingAdminTests(TestCase):
         )
 
         link = MeetingAdmin(Meeting, admin.site).meeting_link(meeting)
+        call_link = MeetingAdmin(Meeting, admin.site).open_meeting(meeting)
 
         self.assertIn(f'href="https://school.example/meetings/{meeting.pk}"', str(link))
+        self.assertIn('Open / start call', str(call_link))
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -759,13 +761,13 @@ class MeetingAdminTests(TestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(f'https://school.example/meetings/{meeting.pk}', mail.outbox[0].body)
-        self.assertTrue(any('sent to 1 recipient' in str(message) for message in request._messages))
+        self.assertTrue(any('SMTP handoff' in str(message) for message in request._messages))
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
         FRONTEND_BASE_URL='https://school.example',
     )
-    def test_standalone_invitation_admin_sends_link_only_on_pending_invitation(self):
+    def test_saving_existing_pending_invitation_resends_email_with_meeting_link(self):
         admin_user = User.objects.create_superuser(
             username='meeting-invitation-admin', email='invitation-admin@example.com',
             password='Password123!',
@@ -794,8 +796,8 @@ class MeetingAdminTests(TestCase):
         invitation_admin.save_model(request, invitation, form=None, change=False)
         invitation_admin.save_model(request, invitation, form=None, change=True)
 
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn(f'https://school.example/meetings/{meeting.pk}', mail.outbox[0].body)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIn(f'https://school.example/meetings/{meeting.pk}', mail.outbox[-1].body)
         self.assertIn(
             f'href="https://school.example/meetings/{meeting.pk}"',
             str(invitation_admin.meeting_link(invitation)),
