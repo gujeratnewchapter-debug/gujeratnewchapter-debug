@@ -6,7 +6,7 @@ import { X, Eye, EyeOff, Github } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
-import { getMe } from '@/lib/api';
+import { getMe, requestPasswordReset } from '@/lib/api';
 import { getAuthRedirectUrl } from '@/lib/auth-redirect';
 
 export function AuthModal({
@@ -30,7 +30,6 @@ export function AuthModal({
   const [signupDisabledUntil, setSignupDisabledUntil] = useState<number | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const modalRef = useRef<HTMLDivElement>(null);
 
   const [signInForm, setSignInForm] = useState({ email: '', password: '' });
@@ -75,7 +74,6 @@ export function AuthModal({
     setRole('student');
     setShowPassword(false);
     setShowConfirmPassword(false);
-    setForgotPasswordEmail('');
     setSignInForm({ email: '', password: '' });
     setSignUpForm({ full_name: '', email: '', password: '', confirm_password: '' });
     setReturnTo(null);
@@ -203,7 +201,7 @@ export function AuthModal({
   }
 
   async function handleForgotPassword() {
-    const email = forgotPasswordEmail.trim();
+    const email = signInForm.email.trim();
     if (!email) {
       setError(t('enterEmailFirst'));
       return;
@@ -212,10 +210,25 @@ export function AuthModal({
     setSuccess('');
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: getAuthRedirectUrl('/reset-password'),
-      });
-      if (error) throw error;
+      const [supabaseResult, djangoResult] = await Promise.allSettled([
+        supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: getAuthRedirectUrl('/reset-password'),
+        }),
+        requestPasswordReset(email),
+      ]);
+      const supabaseError = supabaseResult.status === 'fulfilled'
+        ? supabaseResult.value.error
+        : supabaseResult.reason;
+      const djangoError = djangoResult.status === 'rejected' ? djangoResult.reason : null;
+      if (supabaseError && djangoError) {
+        const detail = djangoError?.response?.data?.detail;
+        throw new Error(
+          (typeof detail === 'string' && detail)
+          || supabaseError?.message
+          || djangoError?.message
+          || 'Unable to send password reset email.',
+        );
+      }
       setSuccess(t('passwordResetSent'));
     } catch (err: any) {
       setError(err?.message || 'Unable to send password reset email.');
@@ -333,10 +346,6 @@ export function AuthModal({
               <button type="button" onClick={handleForgotPassword} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}>
                 {t('forgotPassword')}
               </button>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input className="input" type="email" placeholder={t('enterEmailToReset')} value={forgotPasswordEmail} onChange={(e) => setForgotPasswordEmail(e.target.value)} suppressHydrationWarning />
-              <button type="button" className="btn btn-accent" onClick={handleForgotPassword} disabled={loading}>{t('send')}</button>
             </div>
           </form>
         ) : (

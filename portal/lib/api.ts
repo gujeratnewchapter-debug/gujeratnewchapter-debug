@@ -225,6 +225,16 @@ export const register = (payload: {
 export const login = (username: string, password: string) =>
   apiClient.post('/auth/login/', { username, password }, { timeout: AUTH_REQUEST_TIMEOUT });
 
+export const requestPasswordReset = (email: string) =>
+  axios.post(`${API_BASE_URL.replace(/\/+$/, '')}/auth/password-reset/`, { email }, { timeout: AUTH_REQUEST_TIMEOUT });
+
+export const confirmPasswordReset = (uid: string, token: string, new_password: string) =>
+  axios.post(
+    `${API_BASE_URL.replace(/\/+$/, '')}/auth/password-reset/confirm/`,
+    { uid, token, new_password },
+    { timeout: AUTH_REQUEST_TIMEOUT },
+  );
+
 export const syncSupabaseSession = (accessToken: string) =>
   apiClient.get('/auth/session/sync/', {
     headers: { Authorization: createBearerAuthorization(accessToken) },

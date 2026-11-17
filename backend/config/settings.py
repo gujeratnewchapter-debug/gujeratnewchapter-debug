@@ -370,6 +370,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
+    'DEFAULT_THROTTLE_RATES': {
+        'password_reset': '5/hour',
+        'password_reset_confirm': '20/hour',
+    },
 }
 
 # Production logging: console output so Render/Gunicorn capture Django logs.

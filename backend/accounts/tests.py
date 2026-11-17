@@ -1,7 +1,12 @@
+from urllib.parse import parse_qs, urlparse
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
 from unittest.mock import patch
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -120,6 +125,92 @@ class LoginEmailRegressionTests(TestCase):
 
         self.assertEqual(response.status_code, 401, response.content)
         self.assertEqual(response.json(), {'detail': 'No active account found with the given credentials'})
+
+    @override_settings(FRONTEND_BASE_URL='https://school.example')
+    def test_password_reset_request_emails_a_single_use_frontend_link(self):
+        response = self.client.post(
+            reverse('password_reset'),
+            {'email': self.user.email},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(mail.outbox), 1)
+        reset_url = next(
+            part for part in mail.outbox[0].body.split()
+            if part.startswith('https://school.example/reset-password?')
+        )
+        query = parse_qs(urlparse(reset_url).query)
+        self.assertEqual(query['provider'], ['django'])
+        self.assertEqual(query['uid'], [urlsafe_base64_encode(force_bytes(self.user.pk))])
+        self.assertTrue(default_token_generator.check_token(self.user, query['token'][0]))
+
+    def test_password_reset_request_does_not_disclose_unknown_or_unusable_accounts(self):
+        unknown = self.client.post(
+            reverse('password_reset'),
+            {'email': 'unknown@example.com'},
+            content_type='application/json',
+        )
+        self.user.set_unusable_password()
+        self.user.save(update_fields=['password'])
+        unusable = self.client.post(
+            reverse('password_reset'),
+            {'email': self.user.email},
+            content_type='application/json',
+        )
+
+        expected = {'detail': 'If an eligible account exists for that email, a password reset email will be sent.'}
+        self.assertEqual(unknown.status_code, 200, unknown.content)
+        self.assertEqual(unusable.status_code, 200, unusable.content)
+        self.assertEqual(unknown.json(), expected)
+        self.assertEqual(unusable.json(), expected)
+        self.assertEqual(mail.outbox, [])
+
+    def test_password_reset_confirm_updates_password_and_invalidates_token(self):
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        token = default_token_generator.make_token(self.user)
+        response = self.client.post(
+            reverse('password_reset_confirm'),
+            {'uid': uid, 'token': token, 'new_password': 'A-new-unique-password-482!'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('A-new-unique-password-482!'))
+        self.assertFalse(default_token_generator.check_token(self.user, token))
+
+    def test_password_reset_confirm_rejects_invalid_tokens_and_weak_passwords(self):
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        invalid_token = self.client.post(
+            reverse('password_reset_confirm'),
+            {'uid': uid, 'token': 'invalid-token', 'new_password': 'A-new-unique-password-482!'},
+            content_type='application/json',
+        )
+        weak_password = self.client.post(
+            reverse('password_reset_confirm'),
+            {
+                'uid': uid,
+                'token': default_token_generator.make_token(self.user),
+                'new_password': 'password',
+            },
+            content_type='application/json',
+        )
+
+        self.assertEqual(invalid_token.status_code, 400, invalid_token.content)
+        self.assertEqual(weak_password.status_code, 400, weak_password.content)
+        self.assertTrue(self.user.check_password('Password123!'))
+
+    @patch('accounts.views.send_mail', return_value=0)
+    def test_password_reset_email_delivery_failure_is_reported(self, send_mail):
+        response = self.client.post(
+            reverse('password_reset'),
+            {'email': self.user.email},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 503, response.content)
+        send_mail.assert_called_once()
 
     def test_login_refresh_token_renews_access_for_same_user(self):
         login_response = self.client.post(

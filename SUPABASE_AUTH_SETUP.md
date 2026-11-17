@@ -37,6 +37,9 @@ In the Supabase Dashboard:
   - `https://ethiopian-startup-school-frontend.vercel.app/reset-password`
 - Add `http://localhost:3000/auth/callback` and `http://localhost:3000/reset-password` only for local development.
 - Keep confirmation email templates based on Supabase's `{{ .ConfirmationURL }}`. Do not hard-code a localhost URL in an email template.
+- The sign-in form sends reset requests to Supabase and Django. Supabase handles Supabase-authenticated accounts; Django only emails active legacy accounts that have a usable Django password.
+- Configure the Django production email backend and `DEFAULT_FROM_EMAIL` in Render. Set `FRONTEND_BASE_URL` to the canonical portal URL so legacy reset links return to `/reset-password`.
+- Django reset requests are rate limited. Both account types return the same generic request confirmation so the page does not reveal whether an email is registered.
 
 ### Google OAuth
 
@@ -99,6 +102,8 @@ Set `NEXT_PUBLIC_APP_URL` in the frontend hosting environment to the canonical p
 - https://your-domain.com/reset-password
 
 Backend-issued legacy verification links use `/verify-email?token=...`; that page exchanges the token with the API. Supabase confirmation emails should instead use `/auth/callback`.
+
+Password reset links for Supabase accounts must return to `/reset-password` and retain Supabase's recovery session. Legacy Django reset links include a single-use token and are confirmed by the backend. Test both account types after changing redirect allow-lists or SMTP settings; check inbox and Spam/Junk, and do not treat an accepted SMTP handoff as proof of inbox delivery.
 
 For public launch, configure a production SMTP provider and appropriate sending/rate limits in Supabase Auth. The built-in email service is not intended for high-volume production registration.
 
