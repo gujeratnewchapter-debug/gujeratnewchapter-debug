@@ -57,6 +57,7 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
             recipient_name = (
                 f'{invitee.first_name} {invitee.last_name}'.strip() or invitee.username
             )
+            host_name = meeting.host.get_full_name() or meeting.host.username
             subject = f'You are invited to a live meeting | {school_name}'
             acceptance_instructions = (
                 'Sign in, open the meeting, and accept the invitation. You can join once '
@@ -66,7 +67,7 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
             )
             text_body = (
                 f'Hello {recipient_name},\n\n'
-                f'{meeting.host.get_full_name() or meeting.host.username} invited you to a live meeting.\n\n'
+                f'{host_name} invited you to a live meeting.\n\n'
                 f'Meeting: {meeting.title}\n'
                 f'Type: {kind_label}\n'
                 f'Scheduled for: {scheduled_time}\n\n'
@@ -79,7 +80,7 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
         <div style="font-family:Arial,sans-serif;color:#172033;max-width:620px;margin:0 auto;padding:32px 24px;">
           <p style="margin:0;color:#52637d;font-size:13px;font-weight:700;letter-spacing:.08em;">{escape(school_name.upper())}</p>
           <h1 style="font-size:23px;margin:12px 0 20px;">You are invited to a live meeting</h1>
-          <p style="font-size:15px;line-height:1.6;">Hello {escape(recipient_name)}, {escape(meeting.host.get_full_name() or meeting.host.username)} invited you to join.</p>
+          <p style="font-size:15px;line-height:1.6;">Hello {escape(recipient_name)}, {escape(host_name)} invited you to join.</p>
           <div style="background:#f5f7fb;border-radius:12px;padding:18px 20px;margin:22px 0;">
             <p style="margin:0 0 10px;"><strong>Meeting:</strong> {escape(meeting.title)}</p>
             <p style="margin:0 0 10px;"><strong>Type:</strong> {escape(kind_label)}</p>
