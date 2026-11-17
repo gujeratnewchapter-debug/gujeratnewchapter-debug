@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .authentication import SupabaseJWTAuthentication
 
@@ -84,6 +85,41 @@ class LoginEmailRegressionTests(TestCase):
         payload = response.json()
         self.assertIn('access', payload)
         self.assertIn('refresh', payload)
+
+    def test_login_with_duplicate_emails_authenticates_the_matching_password(self):
+        matching_user = User.objects.create_user(
+            username='alice-duplicate',
+            email='alice@example.com',
+            password='AnotherPassword123!',
+            role=User.Role.STUDENT,
+        )
+
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'alice@example.com', 'password': 'AnotherPassword123!'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        token = RefreshToken(response.json()['refresh'])
+        self.assertEqual(str(token['user_id']), str(matching_user.pk))
+
+    def test_login_with_duplicate_emails_and_ambiguous_password_fails_cleanly(self):
+        User.objects.create_user(
+            username='alice-duplicate',
+            email='alice@example.com',
+            password='Password123!',
+            role=User.Role.STUDENT,
+        )
+
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'alice@example.com', 'password': 'Password123!'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 401, response.content)
+        self.assertEqual(response.json(), {'detail': 'No active account found with the given credentials'})
 
     def test_login_refresh_token_renews_access_for_same_user(self):
         login_response = self.client.post(

@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
@@ -12,11 +13,20 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         password = attrs.get('password')
 
         if username and '@' in username:
-            try:
-                user = User.objects.get(email__iexact=username)
-                attrs[username_field] = user.get_username()
-            except User.DoesNotExist:
-                pass
+            email_users = list(User.objects.filter(email__iexact=username).order_by('pk'))
+            if len(email_users) == 1:
+                attrs[username_field] = email_users[0].get_username()
+            elif len(email_users) > 1:
+                matching_users = [
+                    user for user in email_users
+                    if user.is_active and user.check_password(attrs.get('password', ''))
+                ]
+                if len(matching_users) != 1:
+                    raise AuthenticationFailed(
+                        self.error_messages['no_active_account'],
+                        code='no_active_account',
+                    )
+                attrs[username_field] = matching_users[0].get_username()
 
         return super().validate(attrs)
 
