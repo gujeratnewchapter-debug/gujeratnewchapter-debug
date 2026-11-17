@@ -11,6 +11,20 @@
   margin-bottom: 30px;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.serviceStatusDetails {
+  display: block;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+
 .pageHeader h1 {
   margin: 8px 0 7px;
   font-size: clamp(32px, 4vw, 44px);
@@ -598,6 +612,12 @@
     flex-direction: column;
     gap: 15px;
     margin-bottom: 22px;
+  }
+
+  .headerActions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .pageHeader h1 {

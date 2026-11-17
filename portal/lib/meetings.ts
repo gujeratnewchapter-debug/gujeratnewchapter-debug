@@ -48,10 +48,26 @@ export interface LiveKitToken {
   url: string;
 }
 
+export interface MeetingServiceStatus {
+  livekit: {
+    configured: boolean;
+    missing: string[];
+  };
+  email: {
+    configured: boolean;
+    missing: string[];
+    connection: 'connected' | 'failed' | 'not_configured';
+    error: 'authentication_failed' | 'connection_failed' | null;
+  };
+}
+
 const collection = '/meetings/';
 
 export const getMeetings = (params?: Record<string, string | number>) =>
   apiClient.get(collection, { params });
+
+export const getMeetingServiceStatus = () =>
+  apiClient.get<MeetingServiceStatus>(`${collection}service-status/`);
 
 export const getMeeting = (meetingId: string) =>
   apiClient.get<Meeting>(`${collection}${meetingId}/`);

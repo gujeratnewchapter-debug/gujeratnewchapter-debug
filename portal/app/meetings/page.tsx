@@ -12,8 +12,10 @@ import {
   inviteMeetingUsers,
   Meeting,
   MeetingKind,
+  MeetingServiceStatus,
   reviewConsultation,
   requestConsultation,
+  getMeetingServiceStatus,
 } from '@/lib/meetings';
 import { useAuth } from '@/lib/auth-context';
 import { InnovationLoader } from '@/components/InnovationLoader';
@@ -64,6 +66,8 @@ function MeetingsPageContent() {
   const [reviewingId, setReviewingId] = useState('');
   const [acceptingId, setAcceptingId] = useState('');
   const [showScheduler, setShowScheduler] = useState(false);
+  const [serviceStatus, setServiceStatus] = useState<MeetingServiceStatus | null>(null);
+  const [checkingServices, setCheckingServices] = useState(false);
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<MeetingKind>('classroom');
   const [meetingAudience, setMeetingAudience] = useState<MeetingAudience>('individual');
@@ -264,6 +268,19 @@ function MeetingsPageContent() {
     }
   }
 
+  async function handleCheckServices() {
+    setCheckingServices(true);
+    setActionError('');
+    try {
+      const { data } = await getMeetingServiceStatus();
+      setServiceStatus(data);
+    } catch (checkError: any) {
+      setActionError(checkError?.response?.data?.detail || 'We could not check the meeting services.');
+    } finally {
+      setCheckingServices(false);
+    }
+  }
+
   if (isLoading) {
     return <div className="container section"><InnovationLoader label="Loading meetings" /></div>;
   }
@@ -411,14 +428,44 @@ function MeetingsPageContent() {
           <p className={styles.intro}>Book a private live call with an ESS admin, or join scheduled classes and group sessions.</p>
         </div>
         {canSchedule && (
-          <button className={styles.scheduleButton} onClick={() => {
-            if (isStudent) setKind('consultation');
-            setShowScheduler((visible) => !visible);
-          }}>
-            <Plus size={17} /> {isStudent ? 'Book an admin meeting' : 'Schedule a meeting'}
-          </button>
+          <div className={styles.headerActions}>
+            {isAdmin && (
+              <button className={styles.openButton} type="button" onClick={() => void handleCheckServices()} disabled={checkingServices}>
+                {checkingServices ? <LoaderCircle size={16} className={styles.spin} /> : <Clock3 size={16} />}
+                Check email & video
+              </button>
+            )}
+            <button className={styles.scheduleButton} onClick={() => {
+              if (isStudent) setKind('consultation');
+              setShowScheduler((visible) => !visible);
+            }}>
+              <Plus size={17} /> {isStudent ? 'Book an admin meeting' : 'Schedule a meeting'}
+            </button>
+          </div>
         )}
       </header>
+
+      {serviceStatus && (
+        <section
+          className={serviceStatus.livekit.configured && serviceStatus.email.connection === 'connected'
+            ? styles.successNotice
+            : styles.alert}
+          role="status"
+          aria-live="polite"
+        >
+          <strong>Meeting services</strong>
+          <p className={styles.serviceStatusDetails}>
+            Video: {serviceStatus.livekit.configured ? 'LiveKit credentials configured' : `Not configured (${serviceStatus.livekit.missing.join(', ')})`}.
+            {' '}Email: {serviceStatus.email.connection === 'connected'
+              ? 'SMTP connection successful'
+              : serviceStatus.email.error === 'authentication_failed'
+                ? 'SMTP authentication failed; check the Render email username and password.'
+                : serviceStatus.email.error === 'connection_failed'
+                  ? 'SMTP connection failed; check the Render mail host, port, TLS, or provider restrictions.'
+                  : `Not configured (${serviceStatus.email.missing.join(', ')})`}.
+          </p>
+        </section>
+      )}
 
       {actionError && <p className={styles.alert} role="alert">{actionError}</p>}
       {actionSuccess && <p className={styles.successNotice} role="status">{actionSuccess}</p>}

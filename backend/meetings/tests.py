@@ -1,3 +1,4 @@
+import smtplib
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -51,6 +52,112 @@ class LiveKitAccessTokenTests(TestCase):
     def test_requires_livekit_credentials(self):
         with self.assertRaisesMessage(ValueError, 'LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be configured.'):
             create_livekit_access_token('demo-room', 'user-123', 'student')
+
+
+class MeetingServiceStatusTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username='meeting-service-admin',
+            email='service-admin@example.com',
+            password='Password123!',
+            role=User.Role.SUPER_ADMIN,
+        )
+        self.student = User.objects.create_user(
+            username='meeting-service-student',
+            email='service-student@example.com',
+            password='Password123!',
+            role=User.Role.STUDENT,
+        )
+        self.url = reverse('meeting-service-status')
+
+    @override_settings(
+        LIVEKIT_URL='wss://live.example.com',
+        LIVEKIT_API_KEY='test-livekit-key',
+        LIVEKIT_API_SECRET='test-livekit-secret',
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+        EMAIL_HOST='smtp.example.com',
+        EMAIL_HOST_USER='mail-user',
+        EMAIL_HOST_PASSWORD='mail-password',
+        DEFAULT_FROM_EMAIL='meetings@example.com',
+    )
+    @patch('meetings.views.get_connection')
+    def test_admin_can_check_service_connectivity_without_exposing_secrets(self, get_connection_mock):
+        connection = get_connection_mock.return_value
+        connection.open.return_value = True
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['livekit'], {'configured': True, 'missing': []})
+        self.assertEqual(response.data['email'], {
+            'configured': True,
+            'missing': [],
+            'connection': 'connected',
+            'error': None,
+        })
+        self.assertNotIn('test-livekit-secret', str(response.data))
+        self.assertNotIn('mail-password', str(response.data))
+        connection.close.assert_called_once()
+
+    @override_settings(
+        LIVEKIT_URL='',
+        LIVEKIT_API_KEY='',
+        LIVEKIT_API_SECRET='',
+        EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend',
+        EMAIL_HOST='',
+        EMAIL_HOST_USER='',
+        EMAIL_HOST_PASSWORD='',
+        DEFAULT_FROM_EMAIL='webmaster@localhost',
+    )
+    @patch('meetings.views.get_connection')
+    def test_unconfigured_services_are_reported_without_opening_mail_connection(self, get_connection_mock):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['livekit'], {
+            'configured': False,
+            'missing': ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'],
+        })
+        self.assertEqual(response.data['email'], {
+            'configured': False,
+            'missing': ['EMAIL_BACKEND'],
+            'connection': 'not_configured',
+            'error': None,
+        })
+        get_connection_mock.assert_not_called()
+
+    @override_settings(
+        LIVEKIT_URL='wss://live.example.com',
+        LIVEKIT_API_KEY='test-livekit-key',
+        LIVEKIT_API_SECRET='test-livekit-secret',
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+        EMAIL_HOST='smtp.example.com',
+        EMAIL_HOST_USER='mail-user',
+        EMAIL_HOST_PASSWORD='mail-password',
+        DEFAULT_FROM_EMAIL='meetings@example.com',
+    )
+    @patch('meetings.views.get_connection')
+    def test_smtp_authentication_failure_has_a_safe_diagnostic(self, get_connection_mock):
+        get_connection_mock.return_value.open.side_effect = smtplib.SMTPAuthenticationError(535, b'auth failed')
+        self.client.force_authenticate(self.admin)
+
+        with self.assertLogs('meetings.views', level='ERROR'):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['email']['connection'], 'failed')
+        self.assertEqual(response.data['email']['error'], 'authentication_failed')
+        self.assertNotIn('mail-password', str(response.data))
+
+    def test_students_cannot_check_service_configuration(self):
+        self.client.force_authenticate(self.student)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
 
 
 class MeetingAuthorizationTests(APITestCase):

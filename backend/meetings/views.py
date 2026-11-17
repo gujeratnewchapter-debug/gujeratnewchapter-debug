@@ -1,7 +1,11 @@
+import logging
+import smtplib
+import socket
 import uuid
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.mail import get_connection
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
@@ -10,6 +14,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Meeting, MeetingInvitation, MeetingParticipant, MeetingSession
+
+logger = logging.getLogger(__name__)
 
 
 class IsHostOrAdmin(permissions.BasePermission):
@@ -63,6 +69,72 @@ class MeetingViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         from .serializers import MeetingSerializer
         return MeetingSerializer
+
+    @action(detail=False, methods=['get'], url_path='service-status')
+    def service_status(self, request):
+        if not request.user.is_super_admin:
+            return Response({'detail': 'Only administrators can check meeting services.'}, status=403)
+
+        livekit_missing = [
+            name for name, value in (
+                ('LIVEKIT_URL', settings.LIVEKIT_URL),
+                ('LIVEKIT_API_KEY', settings.LIVEKIT_API_KEY),
+                ('LIVEKIT_API_SECRET', settings.LIVEKIT_API_SECRET),
+            )
+            if not value
+        ]
+        email_missing = [
+            name for name, value in (
+                ('EMAIL_HOST', settings.EMAIL_HOST),
+                ('EMAIL_HOST_USER', settings.EMAIL_HOST_USER),
+                ('EMAIL_HOST_PASSWORD', settings.EMAIL_HOST_PASSWORD),
+                (
+                    'DEFAULT_FROM_EMAIL',
+                    '' if settings.DEFAULT_FROM_EMAIL.endswith('@localhost') else settings.DEFAULT_FROM_EMAIL,
+                ),
+            )
+            if not value
+        ]
+        console_backend = settings.EMAIL_BACKEND.endswith('.console.EmailBackend')
+        email_configured = not console_backend and not email_missing
+        email_connection = 'not_configured'
+        email_error = None
+
+        if email_configured:
+            connection = get_connection(fail_silently=False)
+            try:
+                opened = connection.open()
+                if opened:
+                    email_connection = 'connected'
+                else:
+                    email_connection = 'failed'
+                    email_error = 'connection_failed'
+            except smtplib.SMTPAuthenticationError:
+                email_connection = 'failed'
+                email_error = 'authentication_failed'
+                logger.exception('Meeting service check could not authenticate to the configured email service.')
+            except (smtplib.SMTPException, OSError, socket.timeout):
+                email_connection = 'failed'
+                email_error = 'connection_failed'
+                logger.exception('Meeting service check could not connect to the configured email service.')
+            finally:
+                try:
+                    connection.close()
+                except (smtplib.SMTPException, OSError, socket.timeout):
+                    logger.exception('Meeting service check could not close the email connection.')
+
+        return Response({
+            'livekit': {
+                'configured': not livekit_missing,
+                'missing': livekit_missing,
+            },
+            'email': {
+                'configured': email_configured,
+                'missing': ['EMAIL_BACKEND'] if console_backend else email_missing,
+                'connection': email_connection,
+                'error': email_error,
+            },
+        })
 
     def create(self, request, *args, **kwargs):
         user = request.user
