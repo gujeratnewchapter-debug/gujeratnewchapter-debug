@@ -30,6 +30,7 @@ import {
 import { ConnectionState, Room, RoomEvent, Track } from 'livekit-client';
 import { useAuth } from '@/lib/auth-context';
 import {
+  acceptMeetingInvitation,
   endMeeting,
   getMeeting,
   getMeetingToken,
@@ -158,6 +159,7 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteNotice, setInviteNotice] = useState('');
+  const [acceptingInvitation, setAcceptingInvitation] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
@@ -179,6 +181,11 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
     meeting && user && (String(meeting.host) === String(user.id) || user.role === 'super_admin'),
   );
   const isLive = meeting?.status === 'live';
+  const hasPendingInvitation = Boolean(
+    meeting?.invitations.some(
+      (invitation) => String(invitation.invited_user) === String(user?.id) && invitation.status === 'pending',
+    ),
+  );
 
   const loadMeeting = useCallback(async () => {
     const { data } = await getMeeting(meetingId);
@@ -585,12 +592,36 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
     setInviteNotice('');
     try {
       const { data } = await inviteMeetingUsers(meetingId, emails);
-      setInviteNotice(`${data.invitations.length} invitation${data.invitations.length === 1 ? '' : 's'} sent. Invitees can accept from their Meetings page.`);
+      const delivery = data.email_delivery;
+      if (delivery?.configured && delivery.sent === emails.length && delivery.failed === 0) {
+        setInviteNotice(`${delivery.sent} invitation email${delivery.sent === 1 ? '' : 's'} sent. Invitees can open the link, accept, and join when the room is live.`);
+      } else {
+        setInviteError(
+          delivery?.configured
+            ? `Invitations were saved, but email delivery failed for ${delivery.failed || emails.length} recipient${(delivery.failed || emails.length) === 1 ? '' : 's'}. Check the backend SMTP settings.`
+            : 'Invitations were saved, but the backend email service is not configured to send email.',
+        );
+      }
       setInviteEmails('');
     } catch (inviteFailure: unknown) {
       setInviteError(getErrorMessage(inviteFailure, 'We could not invite those participants. Check the email addresses and try again.'));
     } finally {
       setInviteBusy(false);
+    }
+  }
+
+  async function acceptInvitation() {
+    if (acceptingInvitation) return;
+    setAcceptingInvitation(true);
+    setError('');
+    try {
+      await acceptMeetingInvitation(meetingId);
+      await loadMeeting();
+      setNotice('Invitation accepted. You can join as soon as the host starts the room.');
+    } catch (acceptError: unknown) {
+      setError(getErrorMessage(acceptError, 'We could not accept this invitation. Try again from your meetings schedule.'));
+    } finally {
+      setAcceptingInvitation(false);
     }
   }
 
@@ -617,7 +648,13 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
           <ShieldCheck size={30} />
           <h1>Sign in to enter</h1>
           <p>Meeting rooms are available to authorized Ethiopian Startup School members.</p>
-          <Link className={styles.primaryAction} href="/">Return home to sign in</Link>
+          <button
+            type="button"
+            className={styles.primaryAction}
+            onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal', {
+              detail: { returnTo: `/meetings/${meetingId}` },
+            }))}
+          >Sign in to accept and join</button>
         </section>
       </main>
     );
@@ -717,6 +754,12 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
                 <h2>Waiting for the host</h2>
                 <p>The host will open this room when the session is ready. This page will update automatically.</p>
                 <span>Scheduled for {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(meeting.scheduled_start))}</span>
+                {hasPendingInvitation && (
+                  <button type="button" className={styles.primaryAction} onClick={() => void acceptInvitation()} disabled={acceptingInvitation}>
+                    {acceptingInvitation ? <LoaderCircle size={17} className={styles.spin} /> : <Check size={17} />}
+                    Accept invitation
+                  </button>
+                )}
               </div>
             )}
             {['ended', 'cancelled'].includes(meeting.status) && (
@@ -732,6 +775,12 @@ export default function MeetingRoomPage({ params }: { params: { meetingId: strin
                 <div className={styles.waitingGlyph}>{roomPhase === 'connecting' ? <LoaderCircle size={25} className={styles.spin} /> : <Video size={25} />}</div>
                 <h2>{roomPhase === 'connecting' ? 'Joining the room' : roomPhase === 'disconnected' ? 'Connection closed' : 'The room is live'}</h2>
                 <p>{roomPhase === 'disconnected' ? 'Your connection ended. Rejoin to continue.' : 'Join with your microphone and camera off. You can turn them on once you are inside.'}</p>
+                {hasPendingInvitation && (
+                  <button type="button" className={styles.primaryAction} onClick={() => void acceptInvitation()} disabled={acceptingInvitation}>
+                    {acceptingInvitation ? <LoaderCircle size={17} className={styles.spin} /> : <Check size={17} />}
+                    Accept invitation
+                  </button>
+                )}
                 {(roomPhase === 'idle' || roomPhase === 'disconnected') && (
                   <div className={styles.waitingActions}>
                     <button type="button" className={styles.primaryAction} onClick={() => void connectToRoom()} disabled={actionBusy}>

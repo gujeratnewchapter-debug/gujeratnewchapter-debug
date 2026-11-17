@@ -182,18 +182,37 @@ function MeetingsPageContent() {
             ? `Your meeting is booked for ${formatMeetingTime(meeting.scheduled_start)}. The ESS admin team has been notified by email.`
             : `Your meeting is booked for ${formatMeetingTime(meeting.scheduled_start)}, but we could not email the admin team. Please contact ESS support.`,
         );
-      } else if (invitees.length > 0) {
+      } else if (invitees.length > 0 || (isAdmin && meetingAudience === 'course')) {
         try {
-          const { data } = await inviteMeetingUsers(meeting.id, invitees, isAdmin);
-          const invitationCount = Array.isArray(data?.invitations) ? data.invitations.length : invitees.length;
-          setActionSuccess(
-            `"${meeting.title}" scheduled; ${invitationCount} student${invitationCount === 1 ? '' : 's'} invited. They can accept from their ESS meetings schedule.`,
-          );
+          const courseStudents = isAdmin && meetingAudience === 'course';
+          const { data } = await inviteMeetingUsers(meeting.id, invitees, isAdmin, courseStudents);
+          const invitationCount = Number(data?.invited_count)
+            || (Array.isArray(data?.invitations) ? data.invitations.length : invitees.length);
+          const emailDelivery = data?.email_delivery;
+          if (emailDelivery?.configured && emailDelivery.sent === invitationCount && emailDelivery.failed === 0) {
+            setActionSuccess(
+              courseStudents
+                ? `"${meeting.title}" scheduled and emailed to ${invitationCount} enrolled student${invitationCount === 1 ? '' : 's'}. They can join from the link when you start the room.`
+                : `"${meeting.title}" scheduled and emailed to ${emailDelivery.sent} student${emailDelivery.sent === 1 ? '' : 's'}. They can accept the invitation from its link and join when you start the room.`,
+            );
+          } else {
+            const sent = Number(emailDelivery?.sent) || 0;
+            const failed = Number(emailDelivery?.failed) || invitationCount;
+            const cause = emailDelivery?.configured
+              ? `Email delivery failed for ${failed} invitee${failed === 1 ? '' : 's'}.`
+              : 'The backend email service is not configured for delivery.';
+            setActionError(
+              `"${meeting.title}" was scheduled and access was prepared, but ${cause} Configure the backend SMTP email settings before inviting students.`,
+            );
+            if (sent > 0) {
+              setActionSuccess(`Invitation email sent to ${sent} student${sent === 1 ? '' : 's'}.`);
+            }
+          }
           await loadMeetings();
         } catch (inviteError: any) {
           const reason = inviteError?.response?.data?.detail;
           setActionError(
-            `"${meeting.title}" was created, but invitations did not send${reason ? `: ${reason}` : '. You can resend them from the meeting room.'}`,
+            `"${meeting.title}" was created, but invitations could not be processed${reason ? `: ${reason}` : '. You can retry from the meeting room.'}`,
           );
         }
       } else {
@@ -499,7 +518,7 @@ function MeetingsPageContent() {
             )}
             {isAdmin && meetingAudience === 'course' && (
               <p className={styles.inviteHint}>
-                All students enrolled in the selected course can see and join this classroom meeting.
+                An invitation email with the meeting link will be sent to every active student enrolled in the selected course.
               </p>
             )}
           </div>

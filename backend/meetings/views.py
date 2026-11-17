@@ -168,18 +168,38 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if isinstance(invited_emails, str):
             invited_emails = invited_emails.split(',')
         student_only = request.data.get('student_only') is True
+        course_students = request.data.get('course_students') is True
         if student_only and not request.user.is_super_admin:
             return Response({'detail': 'Only administrators can create student-only invitations.'}, status=403)
+        if course_students:
+            if not request.user.is_super_admin:
+                return Response({'detail': 'Only administrators can email an entire course roster.'}, status=403)
+            if meeting.kind != Meeting.Kind.CLASSROOM or not meeting.course_id:
+                return Response({'detail': 'Choose a course classroom before inviting its students.'}, status=400)
+            if invited_user_ids or invited_emails:
+                return Response({'detail': 'Send course invitations separately from individual invitees.'}, status=400)
         if not isinstance(invited_user_ids, (list, tuple)) or not isinstance(invited_emails, (list, tuple)):
             return Response({'detail': 'Provide user_ids and emails as lists.'}, status=400)
         if any(not isinstance(email, str) for email in invited_emails):
             return Response({'detail': 'Each invitee email must be a string.'}, status=400)
-        if len(invited_user_ids) + len(invited_emails) > 50:
+        if not course_students and len(invited_user_ids) + len(invited_emails) > 50:
             return Response({'detail': 'You can invite up to 50 users at a time.'}, status=400)
 
         User = request.user.__class__
         invitees = {}
         missing_ids = []
+        if course_students:
+            invitees = {
+                student.pk: student
+                for student in User.objects.filter(
+                    enrollments__course_id=meeting.course_id,
+                    is_active=True,
+                    role=User.Role.STUDENT,
+                ).distinct()
+            }
+            if not invitees:
+                return Response({'detail': 'There are no active student accounts enrolled in this course.'}, status=400)
+
         for user_id in invited_user_ids:
             invitee = User.objects.filter(id=user_id, is_active=True).first()
             if student_only and invitee and invitee.role != User.Role.STUDENT:
@@ -213,13 +233,30 @@ class MeetingViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Provide at least one valid invitee.'}, status=400)
 
         created = []
-        for user in invitees.values():
-            obj, _ = MeetingInvitation.objects.get_or_create(meeting=meeting, invited_user=user, defaults={'status': 'pending'})
-            if obj.status in {MeetingInvitation.Status.DECLINED, MeetingInvitation.Status.CANCELLED}:
-                obj.status = MeetingInvitation.Status.PENDING
-                obj.save(update_fields=['status', 'updated_at'])
-            created.append({'user_id': str(user.id), 'email': user.email, 'status': obj.status})
-        return Response({'detail': 'Invitations processed.', 'invitations': created})
+        if not course_students:
+            for user in invitees.values():
+                obj, _ = MeetingInvitation.objects.get_or_create(
+                    meeting=meeting,
+                    invited_user=user,
+                    defaults={'status': MeetingInvitation.Status.PENDING},
+                )
+                if obj.status in {MeetingInvitation.Status.DECLINED, MeetingInvitation.Status.CANCELLED}:
+                    obj.status = MeetingInvitation.Status.PENDING
+                    obj.save(update_fields=['status', 'updated_at'])
+                created.append({'user_id': str(user.id), 'email': user.email, 'status': obj.status})
+        from .emails import send_meeting_invitations
+
+        email_delivery = send_meeting_invitations(
+            meeting,
+            list(invitees.values()),
+            require_acceptance=not course_students,
+        )
+        return Response({
+            'detail': 'Invitations processed.',
+            'invitations': created,
+            'invited_count': len(invitees),
+            'email_delivery': email_delivery,
+        })
 
     @action(detail=True, methods=['post'], url_path='accept-invitation')
     def accept_invitation(self, request, pk=None):

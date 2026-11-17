@@ -248,6 +248,7 @@ class MeetingAuthorizationTests(APITestCase):
         self.assertTrue(created.room_name)
         self.assertTrue(MeetingParticipant.objects.filter(meeting=created, user=self.host, is_host=True).exists())
 
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_admin_can_schedule_individual_group_and_course_meetings(self):
         admin = User.objects.create_user(
             username='meeting-audience-admin', email='audience-admin@example.com',
@@ -307,6 +308,19 @@ class MeetingAuthorizationTests(APITestCase):
         }, format='json')
         self.assertEqual(course_response.status_code, 201, course_response.data)
         course_meeting = Meeting.objects.get(id=course_response.data['id'])
+        course_invites = self.client.post(
+            reverse('meeting-invite-users', args=[course_meeting.id]),
+            {'course_students': True},
+            format='json',
+        )
+        self.assertEqual(course_invites.status_code, 200, course_invites.data)
+        self.assertEqual(course_invites.data['invited_count'], 1)
+        self.assertEqual(course_invites.data['email_delivery'], {
+            'sent': 1,
+            'failed': 0,
+            'configured': True,
+        })
+        self.assertIn(f'/meetings/{course_meeting.id}', mail.outbox[-1].body)
 
         self.client.force_authenticate(self.student)
         self.assertIn(
@@ -445,12 +459,19 @@ class MeetingAuthorizationTests(APITestCase):
         self.assertIn('course', response.data)
         self.assertFalse(Meeting.objects.filter(title='Unauthorized classroom').exists())
 
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_host_can_invite_by_email_and_invitee_must_accept_before_joining(self):
         self.client.force_authenticate(self.host)
         invite_url = reverse('meeting-invite-users', args=[self.meeting.id])
         invite_response = self.client.post(invite_url, {'emails': [' INVITEE@example.com ']}, format='json')
 
         self.assertEqual(invite_response.status_code, 200, invite_response.data)
+        self.assertEqual(invite_response.data['email_delivery'], {
+            'sent': 1,
+            'failed': 0,
+            'configured': True,
+        })
+        self.assertIn(f'/meetings/{self.meeting.id}', mail.outbox[0].body)
         invitation = MeetingInvitation.objects.get(meeting=self.meeting, invited_user=self.other_student)
         self.assertEqual(invitation.status, MeetingInvitation.Status.PENDING)
 
@@ -463,6 +484,46 @@ class MeetingAuthorizationTests(APITestCase):
         self.assertEqual(accept_response.status_code, 200, accept_response.data)
         join_response = self.client.post(self.join_url)
         self.assertEqual(join_response.status_code, 200, join_response.data)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('meetings.emails.EmailMultiAlternatives.send', side_effect=OSError('SMTP unavailable'))
+    def test_invitation_email_failure_is_reported_without_losing_invitation(self, _send_email):
+        self.client.force_authenticate(self.host)
+
+        response = self.client.post(
+            reverse('meeting-invite-users', args=[self.meeting.id]),
+            {'emails': [self.other_student.email]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['email_delivery'], {
+            'sent': 0,
+            'failed': 1,
+            'configured': True,
+        })
+        self.assertTrue(MeetingInvitation.objects.filter(
+            meeting=self.meeting,
+            invited_user=self.other_student,
+            status=MeetingInvitation.Status.PENDING,
+        ).exists())
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend')
+    def test_console_email_backend_does_not_claim_invitation_was_sent(self):
+        self.client.force_authenticate(self.host)
+
+        response = self.client.post(
+            reverse('meeting-invite-users', args=[self.meeting.id]),
+            {'emails': [self.other_student.email]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['email_delivery'], {
+            'sent': 0,
+            'failed': 1,
+            'configured': False,
+        })
 
     def test_host_invite_reports_unknown_email_instead_of_silently_skipping(self):
         self.client.force_authenticate(self.host)
