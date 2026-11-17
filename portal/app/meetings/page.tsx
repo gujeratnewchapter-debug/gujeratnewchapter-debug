@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowUpRight, CalendarDays, Check, Clock3, Headphones, LoaderCircle, Plus, Radio, Users, Video, X } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, Check, Clock3, Copy, Headphones, LoaderCircle, Plus, Radio, Users, Video, X } from 'lucide-react';
 import { getCourses, getMyEnrollments } from '@/lib/api';
 import {
   acceptMeetingInvitation,
@@ -68,6 +68,7 @@ function MeetingsPageContent() {
   const [showScheduler, setShowScheduler] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<MeetingServiceStatus | null>(null);
   const [checkingServices, setCheckingServices] = useState(false);
+  const [copiedMeetingId, setCopiedMeetingId] = useState('');
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<MeetingKind>('classroom');
   const [meetingAudience, setMeetingAudience] = useState<MeetingAudience>('individual');
@@ -281,6 +282,21 @@ function MeetingsPageContent() {
     }
   }
 
+  async function handleCopyMeetingLink(meetingId: string) {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error('Clipboard access is unavailable in this browser.');
+      }
+      await navigator.clipboard.writeText(`${window.location.origin}/meetings/${meetingId}`);
+      setCopiedMeetingId(meetingId);
+      setActionError('');
+      setActionSuccess('Meeting link copied. Invitees must sign in with their ESS account to join.');
+    } catch (copyError) {
+      setActionError(copyError instanceof Error ? copyError.message : 'We could not copy the meeting link.');
+      setCopiedMeetingId('');
+    }
+  }
+
   if (isLoading) {
     return <div className="container section"><InnovationLoader label="Loading meetings" /></div>;
   }
@@ -413,6 +429,17 @@ function MeetingsPageContent() {
             <span className={styles.waitingTag}>
               {meeting.status === 'scheduled' ? 'Waiting for host' : meeting.status === 'live' ? 'Access required' : 'Meeting ended'}
             </span>
+          )}
+          {isHost && ['scheduled', 'live'].includes(meeting.status) && (
+            <button
+              type="button"
+              className={styles.copyLinkButton}
+              onClick={() => void handleCopyMeetingLink(meeting.id)}
+              aria-label={`Copy invite link for ${meeting.title}`}
+            >
+              {copiedMeetingId === meeting.id ? <Check size={14} /> : <Copy size={14} />}
+              {copiedMeetingId === meeting.id ? 'Copied' : 'Copy link'}
+            </button>
           )}
         </div>
       </article>

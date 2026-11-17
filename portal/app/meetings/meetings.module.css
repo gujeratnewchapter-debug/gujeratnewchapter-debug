@@ -289,8 +289,11 @@
 
 .meetingAction {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   min-width: 132px;
   justify-content: flex-end;
+  gap: 7px;
   padding-top: 1px;
 }
 
@@ -300,6 +303,34 @@
   padding: 0 11px;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.copyLinkButton {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #d5e0e5;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fff;
+  color: #355361;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.copyLinkButton:hover {
+  border-color: #9dc9bc;
+  background: #f3fbf7;
+  color: #0b654f;
+}
+
+.copyLinkButton:focus-visible {
+  outline: 3px solid rgba(16, 185, 129, .35);
+  outline-offset: 3px;
 }
 
 .waitingTag {
@@ -641,6 +672,7 @@
 
   .meetingAction {
     grid-column: 2;
+    align-items: flex-start;
     justify-content: flex-start;
     padding-top: 3px;
   }
