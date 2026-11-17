@@ -56,7 +56,8 @@ export interface MeetingServiceStatus {
   email: {
     configured: boolean;
     missing: string[];
-    connection: 'connected' | 'failed' | 'not_configured';
+    provider: 'resend_api' | 'smtp';
+    connection: 'connected' | 'api_configured' | 'failed' | 'not_configured';
     error: 'authentication_failed' | 'connection_failed' | null;
   };
 }
@@ -70,6 +71,10 @@ export type MeetingEmailFailure =
   | 'missing_recipient_email'
   | 'not_configured'
   | 'configuration_error'
+  | 'api_connection_failed'
+  | 'api_unavailable'
+  | 'rate_limited'
+  | 'api_authentication_failed'
   | 'smtp_error'
   | 'unknown'
   | null;
@@ -85,13 +90,21 @@ export function getMeetingEmailFailureAdvice(error: MeetingEmailFailure | undefi
     case 'recipient_rejected':
       return 'The SMTP server rejected the recipient address. Verify the student email and provider recipient policies.';
     case 'message_rejected':
-      return 'The SMTP server rejected the message. Verify the sender address and sender-domain authorization.';
+      return 'The email provider rejected the message. Verify the sender address and sender-domain authorization.';
     case 'missing_recipient_email':
       return 'The invited student account does not have an email address.';
     case 'not_configured':
       return 'The backend email service is not configured for SMTP delivery.';
     case 'configuration_error':
       return 'The backend email service configuration is invalid. Verify the configured mail backend.';
+    case 'api_connection_failed':
+      return 'The backend could not connect to the HTTPS email provider. Check outbound HTTPS access and provider status.';
+    case 'api_authentication_failed':
+      return 'The email provider rejected its API key. Verify the backend email API secret.';
+    case 'api_unavailable':
+      return 'The HTTPS email provider is unavailable. Check its status and retry.';
+    case 'rate_limited':
+      return 'The email provider rate limit was reached. Wait before retrying.';
     case 'smtp_error':
       return 'The SMTP server rejected the request. Check the backend email logs and provider settings.';
     default:

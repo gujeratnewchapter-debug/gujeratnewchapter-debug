@@ -473,7 +473,7 @@ function MeetingsPageContent() {
 
       {serviceStatus && (
         <section
-          className={serviceStatus.livekit.configured && serviceStatus.email.connection === 'connected'
+          className={serviceStatus.livekit.configured && ['connected', 'api_configured'].includes(serviceStatus.email.connection)
             ? styles.successNotice
             : styles.alert}
           role="status"
@@ -484,6 +484,8 @@ function MeetingsPageContent() {
             Video: {serviceStatus.livekit.configured ? 'LiveKit credentials configured' : `Not configured (${serviceStatus.livekit.missing.join(', ')})`}.
             {' '}Email: {serviceStatus.email.connection === 'connected'
               ? 'SMTP connection successful'
+              : serviceStatus.email.connection === 'api_configured'
+                ? 'HTTPS email API key configured (delivery is confirmed only when sending an invitation)'
               : serviceStatus.email.error === 'authentication_failed'
                 ? 'SMTP authentication failed; check the Render email username and password.'
                 : serviceStatus.email.error === 'connection_failed'

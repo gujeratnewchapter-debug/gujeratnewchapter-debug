@@ -1,8 +1,11 @@
+import json
 import logging
 import smtplib
 import socket
 from html import escape
 from urllib.parse import quote
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -15,8 +18,18 @@ from site_settings.models import SiteSettings
 
 logger = logging.getLogger(__name__)
 
+RESEND_EMAILS_URL = 'https://api.resend.com/emails'
+
+
+class ResendEmailError(Exception):
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
+
 
 def _email_failure_code(error):
+    if isinstance(error, ResendEmailError):
+        return error.code
     if isinstance(error, smtplib.SMTPAuthenticationError):
         return 'authentication_failed'
     if isinstance(error, smtplib.SMTPRecipientsRefused):
@@ -32,8 +45,62 @@ def _email_failure_code(error):
     return 'unknown'
 
 
+def _send_via_resend(message):
+    payload = {
+        'from': message.from_email,
+        'to': message.to,
+        'subject': message.subject,
+        'text': message.body,
+    }
+    if message.cc:
+        payload['cc'] = message.cc
+    if message.bcc:
+        payload['bcc'] = message.bcc
+    if message.reply_to:
+        payload['reply_to'] = message.reply_to
+    html_bodies = [
+        content
+        for content, mimetype in message.alternatives
+        if mimetype == 'text/html'
+    ]
+    if html_bodies:
+        payload['html'] = html_bodies[-1]
+
+    request = Request(
+        RESEND_EMAILS_URL,
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': f'Bearer {settings.RESEND_API_KEY}',
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+    try:
+        with urlopen(request, timeout=min(settings.EMAIL_TIMEOUT, 10)) as response:
+            response.read()
+    except HTTPError as error:
+        error_code = (
+            'api_authentication_failed'
+            if error.code in {401, 403}
+            else 'rate_limited'
+            if error.code == 429
+            else 'api_unavailable'
+            if error.code >= 500
+            else 'message_rejected'
+        )
+        logger.error('Resend rejected an invitation request with HTTP status %s.', error.code)
+        raise ResendEmailError(error_code) from error
+    except (TimeoutError, socket.timeout) as error:
+        raise ResendEmailError('timeout') from error
+    except (URLError, OSError) as error:
+        raise ResendEmailError('api_connection_failed') from error
+
+
 def send_meeting_invitations(meeting, invitees, require_acceptance=True):
-    if settings.EMAIL_BACKEND.endswith('.console.EmailBackend'):
+    if (
+        settings.EMAIL_BACKEND.endswith('.console.EmailBackend')
+        and not settings.RESEND_API_KEY
+    ):
         logger.warning(
             'Meeting invitations for %s were not emailed because the console email backend is configured.',
             meeting.pk,
@@ -62,29 +129,32 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
     sent = 0
     failed = 0
     error_code = None
-    try:
-        connection = get_connection(
-            fail_silently=False,
-            timeout=min(settings.EMAIL_TIMEOUT, 10),
-        )
-    except (ImproperlyConfigured, ValueError):
-        logger.exception('Could not configure the email connection for meeting %s.', meeting.pk)
-        return {
-            'sent': 0,
-            'failed': len(invitees),
-            'configured': False,
-            'error': 'configuration_error',
-        }
-    try:
-        connection.open()
-    except (OSError, smtplib.SMTPException) as error:
-        logger.exception('Could not open the email connection for meeting %s.', meeting.pk)
-        return {
-            'sent': 0,
-            'failed': len(invitees),
-            'configured': True,
-            'error': _email_failure_code(error),
-        }
+    use_resend = bool(settings.RESEND_API_KEY)
+    connection = None
+    if not use_resend:
+        try:
+            connection = get_connection(
+                fail_silently=False,
+                timeout=min(settings.EMAIL_TIMEOUT, 10),
+            )
+        except (ImproperlyConfigured, ValueError):
+            logger.exception('Could not configure the email connection for meeting %s.', meeting.pk)
+            return {
+                'sent': 0,
+                'failed': len(invitees),
+                'configured': False,
+                'error': 'configuration_error',
+            }
+        try:
+            connection.open()
+        except (OSError, smtplib.SMTPException) as error:
+            logger.exception('Could not open the email connection for meeting %s.', meeting.pk)
+            return {
+                'sent': 0,
+                'failed': len(invitees),
+                'configured': True,
+                'error': _email_failure_code(error),
+            }
 
     try:
         for invitee in invitees:
@@ -143,16 +213,20 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
                 text_body,
                 from_email,
                 [invitee.email],
-                connection=connection,
+                connection=None if use_resend else connection,
             )
             message.attach_alternative(html_body, 'text/html')
             try:
-                delivered = message.send(fail_silently=False)
+                if use_resend:
+                    _send_via_resend(message)
+                    delivered = 1
+                else:
+                    delivered = message.send(fail_silently=False)
                 sent += delivered
                 if not delivered:
                     failed += 1
                     error_code = error_code or 'message_rejected'
-            except (OSError, smtplib.SMTPException) as error:
+            except (OSError, smtplib.SMTPException, ResendEmailError) as error:
                 failed += 1
                 error_code = error_code or _email_failure_code(error)
                 logger.exception(
@@ -160,10 +234,11 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
                     meeting.pk,
                 )
     finally:
-        try:
-            connection.close()
-        except (OSError, smtplib.SMTPException):
-            logger.exception('Could not close the email connection for meeting %s.', meeting.pk)
+        if connection is not None:
+            try:
+                connection.close()
+            except (OSError, smtplib.SMTPException):
+                logger.exception('Could not close the email connection for meeting %s.', meeting.pk)
 
     return {
         'sent': sent,

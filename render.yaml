@@ -53,6 +53,9 @@ services:
         value: no-reply@ethiopianstartupschool.com
       - key: EMAIL_TIMEOUT
         value: "30"
+      # Required for meeting invitations when Render blocks outbound SMTP.
+      - key: RESEND_API_KEY
+        sync: false
       - key: GUNICORN_WORKERS
         value: "1"
       - key: GUNICORN_THREADS

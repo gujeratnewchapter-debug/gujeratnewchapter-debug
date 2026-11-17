@@ -1,7 +1,9 @@
+import json
 import smtplib
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 import jwt
 from django.contrib import admin
@@ -98,6 +100,7 @@ class MeetingServiceStatusTests(APITestCase):
         self.assertEqual(response.data['email'], {
             'configured': True,
             'missing': [],
+            'provider': 'smtp',
             'connection': 'connected',
             'error': None,
         })
@@ -129,9 +132,38 @@ class MeetingServiceStatusTests(APITestCase):
         self.assertEqual(response.data['email'], {
             'configured': False,
             'missing': ['EMAIL_BACKEND'],
+            'provider': 'smtp',
             'connection': 'not_configured',
             'error': None,
         })
+        get_connection_mock.assert_not_called()
+
+    @override_settings(
+        LIVEKIT_URL='wss://live.example.com',
+        LIVEKIT_API_KEY='test-livekit-key',
+        LIVEKIT_API_SECRET='test-livekit-secret',
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+        EMAIL_HOST='',
+        EMAIL_HOST_USER='',
+        EMAIL_HOST_PASSWORD='',
+        DEFAULT_FROM_EMAIL='webmaster@localhost',
+        RESEND_API_KEY='re_test-api-key',
+    )
+    @patch('meetings.views.get_connection')
+    def test_resend_api_configuration_bypasses_smtp_connectivity_check(self, get_connection_mock):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['email'], {
+            'configured': True,
+            'missing': [],
+            'provider': 'resend_api',
+            'connection': 'api_configured',
+            'error': None,
+        })
+        self.assertNotIn('re_test-api-key', str(response.data))
         get_connection_mock.assert_not_called()
 
     @override_settings(
@@ -155,6 +187,7 @@ class MeetingServiceStatusTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['email']['connection'], 'failed')
         self.assertEqual(response.data['email']['error'], 'authentication_failed')
+        self.assertEqual(response.data['email']['provider'], 'smtp')
         self.assertNotIn('mail-password', str(response.data))
 
     def test_students_cannot_check_service_configuration(self):
@@ -598,6 +631,62 @@ class MeetingAuthorizationTests(APITestCase):
         self.assertEqual(accept_response.status_code, 200, accept_response.data)
         join_response = self.client.post(self.join_url)
         self.assertEqual(join_response.status_code, 200, join_response.data)
+
+    @override_settings(
+        RESEND_API_KEY='re_test-api-key',
+        EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend',
+        FRONTEND_BASE_URL='https://school.example',
+    )
+    @patch('meetings.emails.urlopen')
+    def test_invitation_uses_resend_https_api_when_configured(self, urlopen_mock):
+        self.client.force_authenticate(self.host)
+
+        response = self.client.post(
+            reverse('meeting-invite-users', args=[self.meeting.id]),
+            {'emails': [self.other_student.email]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['email_delivery'], {
+            'sent': 1,
+            'failed': 0,
+            'configured': True,
+            'error': None,
+        })
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(request.full_url, 'https://api.resend.com/emails')
+        self.assertEqual(request.get_header('Authorization'), 'Bearer re_test-api-key')
+        payload = json.loads(request.data)
+        self.assertEqual(payload['to'], [self.other_student.email])
+        self.assertIn(f'https://school.example/meetings/{self.meeting.id}', payload['text'])
+        self.assertIn('Open meeting', payload['html'])
+
+    @override_settings(
+        RESEND_API_KEY='re_test-api-key',
+        EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend',
+    )
+    @patch(
+        'meetings.emails.urlopen',
+        side_effect=HTTPError('https://api.resend.com/emails', 401, 'unauthorized', {}, None),
+    )
+    def test_resend_authentication_failure_has_a_safe_delivery_code(self, _urlopen_mock):
+        self.client.force_authenticate(self.host)
+
+        with self.assertLogs('meetings.emails', level='ERROR'):
+            response = self.client.post(
+                reverse('meeting-invite-users', args=[self.meeting.id]),
+                {'emails': [self.other_student.email]},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['email_delivery'], {
+            'sent': 0,
+            'failed': 1,
+            'configured': True,
+            'error': 'api_authentication_failed',
+        })
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     @patch('meetings.emails.EmailMultiAlternatives.send', side_effect=OSError('SMTP unavailable'))

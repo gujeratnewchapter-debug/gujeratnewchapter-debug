@@ -83,7 +83,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
             )
             if not value
         ]
-        email_missing = [
+        resend_configured = bool(settings.RESEND_API_KEY)
+        email_missing = [] if resend_configured else [
             name for name, value in (
                 ('EMAIL_HOST', settings.EMAIL_HOST),
                 ('EMAIL_HOST_USER', settings.EMAIL_HOST_USER),
@@ -96,11 +97,12 @@ class MeetingViewSet(viewsets.ModelViewSet):
             if not value
         ]
         console_backend = settings.EMAIL_BACKEND.endswith('.console.EmailBackend')
-        email_configured = not console_backend and not email_missing
-        email_connection = 'not_configured'
+        email_configured = resend_configured or (not console_backend and not email_missing)
+        email_provider = 'resend_api' if resend_configured else 'smtp'
+        email_connection = 'api_configured' if resend_configured else 'not_configured'
         email_error = None
 
-        if email_configured:
+        if email_configured and not resend_configured:
             connection = get_connection(fail_silently=False)
             try:
                 opened = connection.open()
@@ -130,7 +132,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
             },
             'email': {
                 'configured': email_configured,
-                'missing': ['EMAIL_BACKEND'] if console_backend else email_missing,
+                'provider': email_provider,
+                'missing': ['EMAIL_BACKEND'] if console_backend and not resend_configured else email_missing,
                 'connection': email_connection,
                 'error': email_error,
             },
