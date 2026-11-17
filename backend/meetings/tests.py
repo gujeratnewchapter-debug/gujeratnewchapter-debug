@@ -1,12 +1,14 @@
 import smtplib
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import jwt
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -14,6 +16,7 @@ from rest_framework.test import APITestCase
 from courses.models import Course
 from enrollments.models import Enrollment
 from meetings.livekit import create_livekit_access_token
+from meetings.admin import MeetingAdmin
 from meetings.models import Meeting, MeetingInvitation, MeetingParticipant
 
 User = get_user_model()
@@ -650,3 +653,110 @@ class MeetingAdminTests(TestCase):
         self.assertTrue(admin.site.is_registered(Meeting))
         self.assertTrue(admin.site.is_registered(MeetingParticipant))
         self.assertTrue(admin.site.is_registered(MeetingInvitation))
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_BASE_URL='https://school.example',
+    )
+    def test_admin_creates_room_and_emails_new_pending_invitation_with_direct_link(self):
+        admin_user = User.objects.create_superuser(
+            username='meeting-admin', email='admin@example.com', password='Password123!',
+        )
+        student = User.objects.create_user(
+            username='meeting-student', email='student@example.com', password='Password123!',
+            role=User.Role.STUDENT,
+        )
+        meeting = Meeting(
+            title='Admin scheduled session',
+            host=admin_user,
+            room_name='',
+            scheduled_start=timezone.now() + timedelta(hours=1),
+        )
+        request = RequestFactory().post('/admin/meetings/meeting/add/')
+        request.user = admin_user
+        request.session = {}
+        request._messages = FallbackStorage(request)
+        meeting_admin = MeetingAdmin(Meeting, admin.site)
+
+        meeting_admin.save_model(request, meeting, form=None, change=False)
+        invitation = MeetingInvitation.objects.create(
+            meeting=meeting,
+            invited_user=student,
+            status=MeetingInvitation.Status.PENDING,
+        )
+        invitation_formset = SimpleNamespace(
+            model=MeetingInvitation,
+            new_objects=[invitation],
+            changed_objects=[],
+        )
+
+        with patch.object(MeetingAdmin, 'save_formset'):
+            meeting_admin.save_related(
+                request,
+                form=SimpleNamespace(instance=meeting, save_m2m=lambda: None),
+                formsets=[invitation_formset],
+                change=False,
+            )
+
+        self.assertTrue(meeting.room_name.startswith('room-'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(
+            f'https://school.example/meetings/{meeting.pk}',
+            mail.outbox[0].body,
+        )
+        self.assertIn('Open meeting', mail.outbox[0].alternatives[0][0])
+        messages = list(request._messages)
+        self.assertTrue(any('sent to 1 recipient' in str(message) for message in messages))
+
+    @override_settings(FRONTEND_BASE_URL='https://school.example')
+    def test_admin_exposes_shareable_link_for_existing_meeting(self):
+        admin_user = User.objects.create_superuser(
+            username='meeting-link-admin', email='admin-link@example.com', password='Password123!',
+        )
+        meeting = Meeting.objects.create(
+            title='Shareable session',
+            host=admin_user,
+            room_name='shareable-session',
+            scheduled_start=timezone.now() + timedelta(hours=1),
+        )
+
+        link = MeetingAdmin(Meeting, admin.site).meeting_link(meeting)
+
+        self.assertIn(f'href="https://school.example/meetings/{meeting.pk}"', str(link))
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_BASE_URL='https://school.example',
+    )
+    def test_admin_can_resend_pending_invitations_for_existing_meetings(self):
+        admin_user = User.objects.create_superuser(
+            username='meeting-resend-admin', email='resend-admin@example.com', password='Password123!',
+        )
+        student = User.objects.create_user(
+            username='meeting-resend-student', email='resend-student@example.com',
+            password='Password123!', role=User.Role.STUDENT,
+        )
+        meeting = Meeting.objects.create(
+            title='Previously unsent invitation',
+            host=admin_user,
+            room_name='previously-unsent',
+            scheduled_start=timezone.now() + timedelta(hours=1),
+        )
+        MeetingInvitation.objects.create(
+            meeting=meeting,
+            invited_user=student,
+            status=MeetingInvitation.Status.PENDING,
+        )
+        request = RequestFactory().post('/admin/meetings/meeting/')
+        request.user = admin_user
+        request.session = {}
+        request._messages = FallbackStorage(request)
+
+        MeetingAdmin(Meeting, admin.site).resend_pending_invitations(
+            request,
+            Meeting.objects.filter(pk=meeting.pk),
+        )
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(f'https://school.example/meetings/{meeting.pk}', mail.outbox[0].body)
+        self.assertTrue(any('sent to 1 recipient' in str(message) for message in request._messages))
