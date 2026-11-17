@@ -9,4 +9,4 @@ if [ "${SEED_BUSINESS_PLAN_DEVELOPMENT:-true}" = "true" ]; then
 fi
 python manage.py collectstatic --noinput
 # Coolify provides $PORT; default to 8000 for local Docker.
-exec gunicorn config.wsgi:application --bind "0.0.0.0:${PORT:-8000}" --workers "${GUNICORN_WORKERS:-1}" --access-logfile - --error-logfile -
+exec gunicorn config.wsgi:application --bind "0.0.0.0:${PORT:-8000}" --workers "${GUNICORN_WORKERS:-1}" --threads "${GUNICORN_THREADS:-4}" --access-logfile - --error-logfile -

@@ -38,7 +38,10 @@ def send_meeting_invitations(meeting, invitees, require_acceptance=True):
     kind_label = meeting.get_kind_display()
     sent = 0
     failed = 0
-    connection = get_connection(fail_silently=False)
+    connection = get_connection(
+        fail_silently=False,
+        timeout=min(settings.EMAIL_TIMEOUT, 10),
+    )
     try:
         connection.open()
     except (OSError, smtplib.SMTPException):

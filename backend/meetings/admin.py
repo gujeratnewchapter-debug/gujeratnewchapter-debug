@@ -1,8 +1,12 @@
+import logging
+import smtplib
 import uuid
 
 from django.conf import settings
 from django.contrib import admin
 from django.contrib import messages
+from django.core.exceptions import ImproperlyConfigured
+from django.db import DatabaseError, transaction
 from django.utils.html import format_html
 
 from .models import (
@@ -12,6 +16,8 @@ from .models import (
     MeetingParticipant,
     MeetingSession,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MeetingParticipantInline(admin.TabularInline):
@@ -79,7 +85,11 @@ class MeetingAdmin(admin.ModelAdmin):
                 for invitation, changed_fields in formset.changed_objects
                 if 'status' in changed_fields and invitation.status == MeetingInvitation.Status.PENDING
             )
-        self._email_invitations(request, form.instance, invitations)
+        if invitations:
+            transaction.on_commit(
+                lambda: self._email_invitations(request, form.instance, invitations),
+                robust=True,
+            )
 
     def _email_invitations(self, request, meeting, invitations):
         recipients = list({invitation.invited_user_id: invitation.invited_user for invitation in invitations}.values())
@@ -88,7 +98,16 @@ class MeetingAdmin(admin.ModelAdmin):
 
         from .emails import send_meeting_invitations
 
-        result = send_meeting_invitations(meeting, recipients)
+        try:
+            result = send_meeting_invitations(meeting, recipients)
+        except (DatabaseError, ImproperlyConfigured, OSError, smtplib.SMTPException, ValueError):
+            logger.exception('Could not prepare or send invitations for meeting %s.', meeting.pk)
+            self.message_user(
+                request,
+                'The invitation was saved, but its email could not be sent. Check the backend email configuration and retry.',
+                level=messages.ERROR,
+            )
+            return
         sent = result['sent']
         failed = result['failed']
         if sent:
@@ -165,10 +184,13 @@ class MeetingInvitationAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if obj.status == MeetingInvitation.Status.PENDING:
-            MeetingAdmin(Meeting, admin.site)._email_invitations(
-                request,
-                obj.meeting,
-                [obj],
+            transaction.on_commit(
+                lambda: MeetingAdmin(Meeting, admin.site)._email_invitations(
+                    request,
+                    obj.meeting,
+                    [obj],
+                ),
+                robust=True,
             )
 
     @admin.action(description='Resend selected pending meeting invitations')

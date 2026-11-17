@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.core import mail
+from django.db import DatabaseError
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -706,7 +707,7 @@ class MeetingAdminTests(TestCase):
             changed_objects=[],
         )
 
-        with patch.object(MeetingAdmin, 'save_formset'):
+        with self.captureOnCommitCallbacks(execute=True), patch.object(MeetingAdmin, 'save_formset'):
             meeting_admin.save_related(
                 request,
                 form=SimpleNamespace(instance=meeting, save_m2m=lambda: None),
@@ -809,8 +810,9 @@ class MeetingAdminTests(TestCase):
             status=MeetingInvitation.Status.PENDING,
         )
 
-        invitation_admin.save_model(request, invitation, form=None, change=False)
-        invitation_admin.save_model(request, invitation, form=None, change=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            invitation_admin.save_model(request, invitation, form=None, change=False)
+            invitation_admin.save_model(request, invitation, form=None, change=True)
 
         self.assertEqual(len(mail.outbox), 2)
         self.assertIn(f'https://school.example/meetings/{meeting.pk}', mail.outbox[-1].body)
@@ -818,3 +820,54 @@ class MeetingAdminTests(TestCase):
             f'href="https://school.example/meetings/{meeting.pk}"',
             str(invitation_admin.meeting_link(invitation)),
         )
+
+    def test_invitation_is_saved_when_email_settings_lookup_fails(self):
+        admin_user = User.objects.create_superuser(
+            username='meeting-save-error-admin',
+            email='meeting-save-error-admin@example.com',
+            password='Password123!',
+        )
+        student = User.objects.create_user(
+            username='meeting-save-error-student',
+            email='meeting-save-error-student@example.com',
+            password='Password123!',
+            role=User.Role.STUDENT,
+        )
+        meeting = Meeting.objects.create(
+            title='Email settings failure session',
+            host=admin_user,
+            room_name='email-settings-failure',
+            scheduled_start=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(admin_user)
+
+        with self.captureOnCommitCallbacks(execute=True), patch(
+            'meetings.emails.send_meeting_invitations',
+            side_effect=DatabaseError('temporary email settings database failure'),
+        ):
+            response = self.client.post(
+                reverse('admin:meetings_meetinginvitation_add'),
+                {
+                    'meeting': str(meeting.pk),
+                    'invited_user': str(student.pk),
+                    'status': MeetingInvitation.Status.PENDING,
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        invitation = MeetingInvitation.objects.get(meeting=meeting, invited_user=student)
+        request = RequestFactory().post('/admin/meetings/meetinginvitation/add/')
+        request.user = admin_user
+        request.session = {}
+        request._messages = FallbackStorage(request)
+        meeting_admin = MeetingAdmin(Meeting, admin.site)
+        with self.assertLogs('meetings.admin', level='ERROR'), patch(
+            'meetings.emails.send_meeting_invitations',
+            side_effect=DatabaseError('temporary email settings database failure'),
+        ):
+            meeting_admin._email_invitations(request, meeting, [invitation])
+        self.assertTrue(any(
+            'invitation was saved, but its email could not be sent' in str(message).lower()
+            for message in request._messages
+        ))
