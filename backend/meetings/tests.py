@@ -7,6 +7,7 @@ import jwt
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.core import mail
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
@@ -649,6 +650,21 @@ class MeetingAuthorizationTests(APITestCase):
 
 
 class MeetingAdminTests(TestCase):
+    def test_staff_can_open_standalone_invitation_add_page(self):
+        admin_user = User.objects.create_superuser(
+            username='meeting-add-page-admin',
+            email='meeting-add-page-admin@example.com',
+            password='Password123!',
+        )
+        self.client.force_login(admin_user)
+
+        response = self.client.get(reverse('admin:meetings_meetinginvitation_add'))
+
+        self.assertEqual(response.status_code, 200, response.content[:1000])
+        invitation_form = response.context['adminform'].form
+        self.assertIsInstance(invitation_form.fields['meeting'].widget, ForeignKeyRawIdWidget)
+        self.assertIsInstance(invitation_form.fields['invited_user'].widget, ForeignKeyRawIdWidget)
+
     def test_meeting_models_are_registered_in_django_admin(self):
         self.assertTrue(admin.site.is_registered(Meeting))
         self.assertTrue(admin.site.is_registered(MeetingParticipant))

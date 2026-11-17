@@ -17,12 +17,14 @@ from .models import (
 class MeetingParticipantInline(admin.TabularInline):
     model = MeetingParticipant
     extra = 0
+    raw_id_fields = ('user',)
     fields = ('user', 'role', 'is_host', 'joined_at', 'left_at', 'is_muted', 'is_camera_on')
 
 
 class MeetingInvitationInline(admin.TabularInline):
     model = MeetingInvitation
     extra = 0
+    raw_id_fields = ('invited_user',)
     fields = ('invited_user', 'status', 'created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at')
 
@@ -152,6 +154,7 @@ class MeetingInvitationAdmin(admin.ModelAdmin):
     list_display = ('meeting', 'invited_user', 'status', 'created_at', 'updated_at')
     list_filter = ('status', 'created_at')
     search_fields = ('meeting__title', 'invited_user__username', 'invited_user__email')
+    raw_id_fields = ('meeting', 'invited_user')
     readonly_fields = ('id', 'meeting_link', 'created_at', 'updated_at')
     actions = ('resend_selected_pending_invitations',)
 
