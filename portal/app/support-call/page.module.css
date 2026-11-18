@@ -1,0 +1,383 @@
+.page {
+  position: relative;
+  min-height: calc(100vh - 72px);
+  padding: clamp(24px, 5vw, 58px) 20px 72px;
+  background:
+    radial-gradient(ellipse at 9% 12%, rgba(52, 211, 153, .13), transparent 34%),
+    linear-gradient(180deg, #f8fcfa, #fff 58%);
+}
+
+.topRule {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: linear-gradient(90deg, #123b5d 0 22%, #10b981 22% 76%, #0f766e 76%);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(360px, 1fr);
+  gap: clamp(32px, 8vw, 106px);
+  align-items: start;
+  width: min(1050px, 100%);
+  margin: 0 auto;
+}
+
+.intro {
+  padding-top: 20px;
+}
+
+.eyebrow,
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.intro h1 {
+  max-width: 470px;
+  margin: 20px 0 16px;
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -.045em;
+}
+
+.intro > p {
+  max-width: 48ch;
+  color: #5a6e7c;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.promises {
+  display: grid;
+  gap: 24px;
+  margin: 38px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.promises li {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+}
+
+.promises li > span {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #d5e9e0;
+  border-radius: 50%;
+  background: #f0fbf6;
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.promises strong,
+.promises small {
+  display: block;
+}
+
+.promises strong {
+  margin: 0 0 3px;
+  color: #123b5d;
+  font-size: 14px;
+}
+
+.promises small {
+  color: #74808b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.backLink {
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.formPanel {
+  overflow: hidden;
+  padding: clamp(23px, 4vw, 38px);
+  border: 1px solid #dcebe5;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 24px 60px rgba(18, 59, 93, .09);
+}
+
+.panelHeading {
+  margin-bottom: 24px;
+}
+
+.step {
+  font-size: 10px;
+  letter-spacing: .1em;
+}
+
+.step span {
+  color: #adc8bc;
+}
+
+.panelHeading h2 {
+  margin: 12px 0 6px;
+  font-size: 25px;
+}
+
+.panelHeading p {
+  margin: 0;
+  color: #74808b;
+  font-size: 13px;
+}
+
+.form {
+  display: grid;
+  gap: 17px;
+}
+
+.modeField {
+  min-width: 0;
+  margin: 0 0 2px;
+  padding: 0;
+  border: 0;
+}
+
+.modeField legend,
+.field label {
+  display: block;
+  margin-bottom: 8px;
+  color: #24455f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.modeOptions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.modeOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 11px;
+  border: 1px solid #dce7e2;
+  border-radius: 9px;
+  background: #fff;
+  color: #617282;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.modeOption:hover {
+  transform: translateY(-1px);
+  border-color: #9bdcc2;
+}
+
+.modeOption:focus-visible,
+.field input:focus-visible,
+.field textarea:focus-visible,
+.submit:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, .28);
+  outline-offset: 2px;
+}
+
+.modeOption > svg {
+  flex: 0 0 auto;
+  color: #0f766e;
+}
+
+.modeOption span:nth-child(2) {
+  flex: 1;
+}
+
+.modeOption strong,
+.modeOption small {
+  display: block;
+}
+
+.modeOption strong {
+  color: #183c56;
+  font-size: 12px;
+}
+
+.modeOption small {
+  margin-top: 2px;
+  color: #74808b;
+  font-size: 10px;
+}
+
+.modeSelected {
+  border-color: #25a879;
+  background: #f1fbf6;
+  box-shadow: inset 0 0 0 1px #25a879;
+}
+
+.radioMark {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #bdcbc5;
+  border-radius: 50%;
+}
+
+.modeSelected .radioMark {
+  border: 4px solid #0f9b68;
+}
+
+.field input,
+.field textarea {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d9e4df;
+  border-radius: 8px;
+  background: #fff;
+  color: #183c56;
+  font: inherit;
+  font-size: 13px;
+}
+
+.field input {
+  height: 42px;
+}
+
+.field input[readonly] {
+  background: #f6f9f7;
+  color: #62727e;
+}
+
+.field textarea {
+  min-height: 78px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field label span {
+  margin-left: 4px;
+  color: #8a969d;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.field > small {
+  display: block;
+  margin-top: 5px;
+  color: #7d8991;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.error {
+  margin: -4px 0 0;
+  color: #b42318;
+  font-size: 12px;
+}
+
+.submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 45px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: #0f8a63;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background .16s ease, transform .16s ease;
+}
+
+.submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #0b7656;
+}
+
+.submit:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+.privacy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: -7px 0 0;
+  color: #74808b;
+  font-size: 10px;
+}
+
+.privacy svg {
+  color: #0f766e;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .intro {
+    padding-top: 0;
+  }
+
+  .intro h1 {
+    margin-top: 15px;
+    font-size: clamp(32px, 9vw, 43px);
+  }
+
+  .intro > p {
+    font-size: 14px;
+  }
+
+  .promises {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin: 23px 0 18px;
+  }
+
+  .formPanel {
+    padding: 23px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeOption,
+  .submit {
+    transition: none;
+  }
+
+  .spinner {
+    animation-duration: 2s;
+  }
+}

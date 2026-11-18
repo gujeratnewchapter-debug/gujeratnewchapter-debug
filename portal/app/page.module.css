@@ -1,0 +1,87 @@
+.homeSupportRow {
+  padding-top: 24px;
+  padding-bottom: 12px;
+}
+
+.homeSupportCard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  overflow: hidden;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid #d6ebe2;
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse at 91% 0%, rgba(52, 211, 153, .15), transparent 38%),
+    linear-gradient(112deg, #f3fbf7, #ffffff 68%);
+  box-shadow: 0 16px 38px rgba(18, 59, 93, .07);
+}
+
+.homeSupportCard::before {
+  position: absolute;
+  inset: 18px auto 18px 0;
+  width: 4px;
+  border-radius: 0 6px 6px 0;
+  background: linear-gradient(180deg, #10b981, #0f766e);
+  content: '';
+}
+
+.homeSupportCopy {
+  max-width: 720px;
+}
+
+.homeSupportKicker {
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.homeSupportCopy h2 {
+  margin: 8px 0 10px;
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+.homeSupportCopy p {
+  max-width: 68ch;
+  margin: 0;
+  color: #526676;
+  line-height: 1.65;
+}
+
+.homeSupportActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.homeSupportActions :global(.btn) {
+  min-height: 42px;
+  padding: 10px 16px;
+}
+
+.homeSupportActions :global(.btn):focus-visible {
+  outline: 3px solid rgba(15, 118, 110, .35);
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .homeSupportCard {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px 20px 24px 24px;
+  }
+
+  .homeSupportActions {
+    width: 100%;
+  }
+
+  .homeSupportActions :global(.btn) {
+    flex: 1 1 145px;
+  }
+}

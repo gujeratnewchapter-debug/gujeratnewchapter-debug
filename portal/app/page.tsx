@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, GraduationCap, Rocket, LineChart, Award, BookOpen, Users, ArrowUpRight } from 'lucide-react';
+import { Search, GraduationCap, Rocket, LineChart, Award, BookOpen, Users, ArrowUpRight, Phone, Video } from 'lucide-react';
 
 import { getCourses, getCategories, getSiteSettings, getPageContent, resolveMediaUrl } from '@/lib/api';
 import { ApiImage } from '@/components/ApiImage';
@@ -26,6 +26,7 @@ import { CourseCard } from '@/components/CourseCard';
 import { HomeNewsSection } from '@/components/HomeNewsSection';
 import { getSignInProcessSteps } from '@/lib/sign-in-guide';
 import { getHomeNoticesCallout } from '@/lib/home-notices-callout';
+import homeStyles from './page.module.css';
 
 const AI_MODES = [
   { icon: GraduationCap, label: 'AI Tutor', mode: 'tutor', desc: 'Explains concepts, summarizes lessons, and drills you with practice quizzes whenever you\u2019re stuck.' },
@@ -40,7 +41,7 @@ const STEPS = [
 ];
 export default function HomePage() {
   const { t, lang } = useI18n();
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [courses, setCourses] = useState<any[]>([]);
@@ -167,6 +168,30 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {(!user || user.role === 'student') && (
+        <section className={`container ${homeStyles.homeSupportRow}`} aria-labelledby="home-support-title">
+          <div className={homeStyles.homeSupportCard}>
+            <div className={homeStyles.homeSupportCopy}>
+              <span className={homeStyles.homeSupportKicker}>ESS support desk</span>
+              <h2 id="home-support-title">A real person is ready to help</h2>
+              <p>
+                If you have any questions or need assistance, please feel free to contact or meet with our support agent or administrator.
+              </p>
+            </div>
+            <div className={homeStyles.homeSupportActions} aria-label="Choose a support call type">
+              <Link href="/support-call?mode=audio" className="btn btn-primary">
+                <Phone size={16} aria-hidden="true" />
+                Voice call
+              </Link>
+              <Link href="/support-call?mode=video" className="btn btn-accent">
+                <Video size={16} aria-hidden="true" />
+                Video call
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {startupDesignationSection && (
         <section className="container home-startup-designation-row" aria-labelledby="startup-designation-title">

@@ -1,0 +1,425 @@
+.page {
+  width: min(1040px, calc(100% - 40px));
+  min-height: calc(100vh - 74px);
+  margin: 0 auto;
+  padding: clamp(32px, 5vw, 58px) 0 56px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+
+.header h1 {
+  margin: 11px 0 7px;
+  font-size: clamp(30px, 4vw, 40px);
+}
+
+.header p {
+  margin: 0;
+  color: #71808b;
+  font-size: 14px;
+}
+
+.refresh,
+.join,
+.accept,
+.reject {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 37px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.refresh {
+  border-color: #d7e5df;
+  background: #fff;
+  color: #23465d;
+}
+
+.refresh:hover,
+.join:hover {
+  background: #f0faf5;
+}
+
+.refresh:disabled,
+.accept:disabled,
+.reject:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.availability {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 24px 0 34px;
+  padding: 11px 14px;
+  border: 1px solid #dcece3;
+  border-radius: 8px;
+  background: #f3fbf6;
+  color: #526a60;
+  font-size: 11px;
+}
+
+.availability > span:nth-child(2) {
+  color: #9caaa3;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #21a674;
+  box-shadow: 0 0 0 3px rgba(33, 166, 116, .13);
+}
+
+.section {
+  margin-top: 32px;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sectionHeading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.sectionHeading span {
+  color: #839098;
+  font-size: 11px;
+}
+
+.queueList {
+  display: grid;
+  gap: 11px;
+}
+
+.callCard {
+  padding: 18px 20px;
+  border: 1px solid #dce7e1;
+  border-left: 3px solid #17a777;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 7px 20px rgba(18, 59, 93, .035);
+}
+
+.callIdentity,
+.callMeta,
+.actions,
+.activeCall {
+  display: flex;
+  align-items: center;
+}
+
+.callIdentity {
+  gap: 11px;
+}
+
+.avatar {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9f8f0;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.caller strong,
+.caller a {
+  display: block;
+}
+
+.caller strong {
+  color: #123b5d;
+  font-size: 14px;
+}
+
+.caller a {
+  margin-top: 2px;
+  color: #71808b;
+  font-size: 11px;
+}
+
+.caller a:hover {
+  color: #0f766e;
+  text-decoration: underline;
+}
+
+.callMeta {
+  flex-wrap: wrap;
+  gap: 13px;
+  margin: 14px 0 0 49px;
+  color: #79878f;
+  font-size: 10px;
+}
+
+.mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.question {
+  margin: 13px 0 0 49px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f7faf8;
+  color: #536673;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.accept {
+  background: #0f8a63;
+  color: #fff;
+}
+
+.accept:hover {
+  background: #0b7656;
+}
+
+.reject {
+  border-color: #e5e9e7;
+  background: #fff;
+  color: #66757f;
+}
+
+.reject:hover {
+  border-color: #edb9b4;
+  background: #fff8f7;
+  color: #a63b34;
+}
+
+.join {
+  border-color: #b6e2ce;
+  background: #f1fbf6;
+  color: #0f766e;
+}
+
+.activeEmpty,
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 135px;
+  border: 1px dashed #d9e5df;
+  border-radius: 9px;
+  background: rgba(255,255,255,.7);
+  color: #85918f;
+  font-size: 12px;
+}
+
+.empty strong {
+  color: #3b596c;
+  font-size: 13px;
+}
+
+.empty small {
+  font-size: 11px;
+}
+
+.emptyMark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf8f2;
+  color: #0f766e;
+}
+
+.activeList {
+  display: grid;
+  gap: 8px;
+}
+
+.activeCall {
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid #dce7e1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.activeCall > div:first-child strong,
+.activeCall > div:first-child span {
+  display: block;
+}
+
+.activeCall strong {
+  color: #123b5d;
+  font-size: 12px;
+}
+
+.activeCall > div:first-child span {
+  margin-top: 4px;
+  color: #75828c;
+  font-size: 10px;
+}
+
+.activeCall .actions {
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.error {
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid #efc7c3;
+  border-radius: 7px;
+  background: #fff7f6;
+  color: #a03b34;
+  font-size: 12px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 38px;
+  padding-top: 17px;
+  border-top: 1px solid #e8eeeb;
+  color: #819098;
+  font-size: 10px;
+}
+
+.footer a {
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 60vh;
+  color: #60717b;
+  text-align: center;
+}
+
+.state h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.state p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.state a {
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 650px) {
+  .page {
+    width: min(100% - 28px, 1040px);
+  }
+
+  .header {
+    align-items: flex-start;
+  }
+
+  .refresh {
+    flex: 0 0 auto;
+  }
+
+  .availability {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin: 18px 0 28px;
+    line-height: 1.5;
+  }
+
+  .callCard {
+    padding: 15px;
+  }
+
+  .callMeta,
+  .question {
+    margin-left: 0;
+  }
+
+  .activeCall {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .activeCall .actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2s;
+  }
+}
