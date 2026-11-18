@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Headphones, LoaderCircle, Phone, RefreshCw, Video } from 'lucide-react';
+import { Bell, BellOff, Headphones, LoaderCircle, Phone, RefreshCw, Video } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import {
   getAdminSupportCalls,
@@ -17,6 +17,24 @@ function requestTime(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
+function playIncomingRingtone(context: AudioContext) {
+  const startAt = context.currentTime;
+  [0, 0.24].forEach((offset, index) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const toneStart = startAt + offset;
+    oscillator.type = 'sine';
+    oscillator.frequency.value = index === 0 ? 660 : 880;
+    gain.gain.setValueAtTime(0.0001, toneStart);
+    gain.gain.exponentialRampToValueAtTime(0.16, toneStart + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, toneStart + 0.19);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(toneStart);
+    oscillator.stop(toneStart + 0.2);
+  });
+}
+
 export default function AdminSupportCallsPage() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -25,6 +43,12 @@ export default function AdminSupportCallsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundError, setSoundError] = useState('');
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const pending = calls.filter((call) => call.status === 'pending');
+  const pendingCount = pending.length;
+  const active = calls.filter((call) => call.status === 'accepted');
 
   const refresh = useCallback(async () => {
     try {
@@ -44,6 +68,38 @@ export default function AdminSupportCallsPage() {
     const timer = window.setInterval(() => { void refresh(); }, 6000);
     return () => window.clearInterval(timer);
   }, [isAdmin, isLoading, refresh]);
+
+  useEffect(() => {
+    const context = audioContextRef.current;
+    if (!soundEnabled || pendingCount === 0 || !context || context.state !== 'running') return;
+
+    playIncomingRingtone(context);
+    const timer = window.setInterval(() => playIncomingRingtone(context), 2800);
+    return () => window.clearInterval(timer);
+  }, [soundEnabled, pendingCount]);
+
+  useEffect(() => () => {
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+  }, []);
+
+  async function toggleCallSound() {
+    setSoundError('');
+    if (soundEnabled) {
+      setSoundEnabled(false);
+      return;
+    }
+
+    try {
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      await context.resume();
+      audioContextRef.current = context;
+      setSoundEnabled(true);
+    } catch {
+      setSoundError('Call sound could not be enabled. Check your browser audio settings and try again.');
+    }
+  }
 
   async function handleAction(call: SupportCallState, action: 'accept' | 'reject' | 'end') {
     setBusy(`${call.call_id}:${action}`);
@@ -76,9 +132,6 @@ export default function AdminSupportCallsPage() {
     );
   }
 
-  const pending = calls.filter((call) => call.status === 'pending');
-  const active = calls.filter((call) => call.status === 'accepted');
-
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -87,19 +140,28 @@ export default function AdminSupportCallsPage() {
           <h1>Support call queue</h1>
           <p>Accept a request to connect directly. Keep this page open to see new callers.</p>
         </div>
-        <button type="button" className={styles.refresh} onClick={() => void refresh()} disabled={loading}>
-          <RefreshCw size={15} className={loading ? styles.spinner : ''} /> Refresh
-        </button>
+        <div className={styles.headerActions}>
+          <button type="button" className={soundEnabled ? styles.soundEnabled : styles.refresh} onClick={() => void toggleCallSound()} aria-pressed={soundEnabled}>
+            {soundEnabled ? <Bell size={15} /> : <BellOff size={15} />}
+            {soundEnabled ? 'Sound on' : 'Enable call sound'}
+          </button>
+          <button type="button" className={styles.refresh} onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw size={15} className={loading ? styles.spinner : ''} /> Refresh
+          </button>
+        </div>
       </header>
 
       <div className={styles.availability}>
         <span className={styles.liveDot} />
         Queue updates every 6 seconds
         <span>•</span>
+        {soundEnabled ? 'Incoming call sound enabled' : 'Enable call sound to hear new requests'}
+        <span>•</span>
         Visitors wait up to 10 minutes for an administrator
       </div>
 
       {error && <div className={styles.error} role="alert">{error}</div>}
+      {soundError && <div className={styles.error} role="alert">{soundError}</div>}
 
       <section aria-labelledby="waiting-title" className={styles.section}>
         <div className={styles.sectionHeading}>

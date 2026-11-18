@@ -33,9 +33,17 @@
   font-size: 14px;
 }
 
+.headerActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .refresh,
 .join,
 .accept,
+.soundEnabled,
 .reject {
   display: inline-flex;
   align-items: center;
@@ -56,6 +64,16 @@
   border-color: #d7e5df;
   background: #fff;
   color: #23465d;
+}
+
+.soundEnabled {
+  border-color: #b6e2ce;
+  background: #f1fbf6;
+  color: #0f766e;
+}
+
+.soundEnabled:hover {
+  background: #e4f7ed;
 }
 
 .refresh:hover,
@@ -384,6 +402,11 @@
 
   .refresh {
     flex: 0 0 auto;
+  }
+
+  .headerActions {
+    align-items: flex-end;
+    flex-direction: column;
   }
 
   .availability {
