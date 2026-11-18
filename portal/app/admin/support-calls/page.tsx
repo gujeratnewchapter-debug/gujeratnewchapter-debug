@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Headphones, LoaderCircle, Phone, RefreshCw, Video } from 'lucide-react';
+import { Bell, BellOff, Headphones, LoaderCircle, Phone, RefreshCw, Video, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import {
   getAdminSupportCalls,
@@ -46,6 +46,8 @@ export default function AdminSupportCallsPage() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [soundError, setSoundError] = useState('');
   const audioContextRef = useRef<AudioContext | null>(null);
+  const [incomingCall, setIncomingCall] = useState<SupportCallState | null>(null);
+  const alertedCallIds = useRef(new Set<string>());
   const pending = calls.filter((call) => call.status === 'pending');
   const pendingCount = pending.length;
   const active = calls.filter((call) => call.status === 'accepted');
@@ -54,6 +56,16 @@ export default function AdminSupportCallsPage() {
     try {
       const { data } = await getAdminSupportCalls();
       setCalls(data);
+      setIncomingCall((current) => {
+        if (current && data.some((call) => call.call_id === current.call_id && call.status === 'pending')) {
+          return current;
+        }
+        const nextCall = data.find((call) => (
+          call.status === 'pending' && !alertedCallIds.current.has(call.call_id)
+        ));
+        if (nextCall) alertedCallIds.current.add(nextCall.call_id);
+        return nextCall ?? null;
+      });
       setError('');
     } catch (requestError) {
       setError(getSupportCallError(requestError, 'Could not load the support queue. Please try again.'));
@@ -162,6 +174,34 @@ export default function AdminSupportCallsPage() {
 
       {error && <div className={styles.error} role="alert">{error}</div>}
       {soundError && <div className={styles.error} role="alert">{soundError}</div>}
+
+      {incomingCall && (
+        <div className={styles.incomingBackdrop}>
+          <section className={styles.incomingDialog} role="alertdialog" aria-modal="true" aria-labelledby="incoming-call-title" aria-describedby="incoming-call-description">
+            <button type="button" className={styles.dismissIncoming} onClick={() => setIncomingCall(null)} aria-label="Dismiss incoming call alert">
+              <X size={18} />
+            </button>
+            <div className={styles.incomingIcon}>
+              {incomingCall.mode === 'video' ? <Video size={24} /> : <Phone size={24} />}
+            </div>
+            <div className={styles.incomingEyebrow}>INCOMING SUPPORT CALL</div>
+            <h2 id="incoming-call-title">{incomingCall.display_name}</h2>
+            <p id="incoming-call-description">
+              {incomingCall.mode_label || (incomingCall.mode === 'video' ? 'Video call' : 'Voice call')}
+              {incomingCall.email ? ` · ${incomingCall.email}` : ''}
+            </p>
+            {incomingCall.question && <div className={styles.incomingQuestion}>{incomingCall.question}</div>}
+            <div className={styles.incomingActions}>
+              <button type="button" className={styles.reject} onClick={() => void handleAction(incomingCall, 'reject')} disabled={busy !== null}>
+                {busy === `${incomingCall.call_id}:reject` ? 'Declining…' : 'Decline'}
+              </button>
+              <button type="button" className={styles.accept} onClick={() => void handleAction(incomingCall, 'accept')} disabled={busy !== null}>
+                {busy === `${incomingCall.call_id}:accept` ? <><LoaderCircle size={15} className={styles.spinner} /> Answering…</> : 'Answer call'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section aria-labelledby="waiting-title" className={styles.section}>
         <div className={styles.sectionHeading}>

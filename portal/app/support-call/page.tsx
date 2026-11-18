@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Headphones, LoaderCircle, LockKeyhole, Phone, Video } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { createSupportCall, getSupportCallError, SupportCallMode } from '@/lib/support-calls';
+import { enableSupportCallAudio } from '@/lib/support-call-audio';
 import styles from './page.module.css';
 
 export default function SupportCallRequestPage() {
@@ -33,6 +34,7 @@ export default function SupportCallRequestPage() {
     event.preventDefault();
     setSubmitting(true);
     setError('');
+    const audioReady = enableSupportCallAudio().catch(() => false);
     try {
       const { data } = await createSupportCall({
         display_name: displayName.trim(),
@@ -40,6 +42,7 @@ export default function SupportCallRequestPage() {
         question: question.trim(),
         mode,
       });
+      await audioReady;
       window.sessionStorage.setItem(`ess-support-call:${data.call_id}`, data.capability);
       router.push(`/support-call/${data.call_id}`);
     } catch (requestError) {

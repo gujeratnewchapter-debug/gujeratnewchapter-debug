@@ -14,11 +14,13 @@ import {
   PhoneOff,
   ShieldCheck,
   Video,
+  Volume2,
   Wifi,
   WifiOff,
 } from 'lucide-react';
 import { Room, RoomEvent, Track } from 'livekit-client';
 import { useAuth } from '@/lib/auth-context';
+import { enableSupportCallAudio, startSupportCallRingback } from '@/lib/support-call-audio';
 import {
   getAdminSupportCall,
   getAdminSupportCallToken,
@@ -98,6 +100,8 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
   const [elapsed, setElapsed] = useState(0);
   const [, setMediaRevision] = useState(0);
   const [mediaNotice, setMediaNotice] = useState('');
+  const [ringbackEnabled, setRingbackEnabled] = useState(false);
+  const [ringbackUnavailable, setRingbackUnavailable] = useState(false);
   const roomRef = useRef<Room | null>(null);
   const manualLeaveRef = useRef(false);
   const phaseRef = useRef<RoomPhase>(phase);
@@ -160,6 +164,13 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     const timer = window.setInterval(() => setElapsed((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
   }, [phase]);
+
+  useEffect(() => {
+    if (call?.status !== 'pending') return;
+    const stopRingback = startSupportCallRingback();
+    if (!stopRingback && !ringbackEnabled) setRingbackUnavailable(true);
+    return stopRingback ?? undefined;
+  }, [call?.status, ringbackEnabled]);
 
   useEffect(() => () => {
     roomRef.current?.disconnect();
@@ -262,6 +273,21 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     }
   }
 
+  async function enableRingback() {
+    try {
+      const enabled = await enableSupportCallAudio();
+      if (!enabled) {
+        setRingbackUnavailable(true);
+        return;
+      }
+      setRingbackEnabled(true);
+      setRingbackUnavailable(false);
+    } catch (audioError) {
+      setRingbackUnavailable(true);
+      setError(errorText(audioError, 'Calling tone could not be enabled. Check your browser audio settings.'));
+    }
+  }
+
   function leaveCall() {
     manualLeaveRef.current = true;
     roomRef.current?.disconnect();
@@ -344,10 +370,15 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
           {waiting && (
             <div className={styles.queueNotice}>
               <span className={styles.pulse} />
-              <span>Waiting in the queue<small>Only an administrator can accept and start the call.</small></span>
+              <span>Calling ESS support<small>Your calling tone repeats until an administrator responds. Keep this page open.</small></span>
             </div>
           )}
           {error && <p className={styles.inlineError} role="alert">{error}</p>}
+          {waiting && ringbackUnavailable && (
+            <button type="button" className={styles.primaryButton} onClick={() => void enableRingback()}>
+              <Volume2 size={16} /> Enable calling tone
+            </button>
+          )}
           {call?.status === 'accepted' && !ended && phase !== 'connecting' && phase !== 'connected' && phase !== 'reconnecting' && (
             <button type="button" className={styles.primaryButton} onClick={() => void connectToCall()} disabled={joining}>
               {joining
