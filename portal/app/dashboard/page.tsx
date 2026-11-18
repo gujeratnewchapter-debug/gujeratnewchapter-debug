@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BrainCircuit, CheckCircle2, Plus, Sparkles, Trash2 } from 'lucide-react';
-import { useAuth } from '@/lib/auth-context';
+import { isSuperAdminUser, useAuth } from '@/lib/auth-context';
 import { deleteCourse, getCourse, getCourses, getEnrollmentProgress, getInstructorAnalytics, getMyEnrollments } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useFeatureFlag } from '@/lib/featureFlags';
@@ -13,6 +13,7 @@ import { getResumeLessonPath } from '@/lib/course-navigation';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
+  const isSuperAdmin = isSuperAdminUser(user);
   const { t } = useI18n();
   const startupToolsEnabled = useFeatureFlag('startup_tools', isBackendAuthenticated);
   const router = useRouter();
@@ -101,6 +102,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => router.push('/courses')}>{t('browseCourses')}</button>
             <button className="btn" onClick={() => router.push('/meetings')}>Meetings</button>
+            {isSuperAdmin && <button className="btn" onClick={() => router.push('/admin/support-calls')}>Support call queue</button>}
             <button className="btn" onClick={() => router.push('/ai-tutor')}>{t('openAiTutor')}</button>
             {startupToolsEnabled && <button className="btn" onClick={() => router.push('/startup-workspace')}>{t('startupWorkspace')}</button>}
             <button className="btn" onClick={() => router.push('/profile')}>{t('profile')}</button>
@@ -122,7 +124,7 @@ export default function DashboardPage() {
           </div>
           <div className="card">
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('yourRole')}</p>
-            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{user?.role === 'instructor' ? t('instructor') : user?.role === 'mentor' ? 'Mentor' : user?.role === 'super_admin' ? t('admin') : t('student')}</p>
+            <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{isSuperAdmin ? t('admin') : user?.role === 'instructor' ? t('instructor') : user?.role === 'mentor' ? 'Mentor' : t('student')}</p>
           </div>
         </div>
       </div>

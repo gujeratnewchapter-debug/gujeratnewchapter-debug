@@ -233,6 +233,21 @@ class LoginEmailRegressionTests(TestCase):
         self.assertEqual(profile_response.status_code, 200, profile_response.content)
         self.assertEqual(profile_response.json()['id'], self.user.id)
         self.assertEqual(profile_response.json()['role'], User.Role.STUDENT)
+        self.assertFalse(profile_response.json()['is_super_admin'])
+
+    def test_superuser_profile_exposes_administrator_access_flag(self):
+        admin = User.objects.create_superuser(
+            username='root-support-admin',
+            email='root-support-admin@example.com',
+            password='Password123!',
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse('me'))
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['role'], User.Role.STUDENT)
+        self.assertTrue(response.json()['is_super_admin'])
 
     def test_session_sync_requires_bearer_authentication(self):
         response = self.client.get(reverse('session_sync'))
@@ -280,13 +295,16 @@ class LoginEmailRegressionTests(TestCase):
             reverse('me'), {'role': User.Role.INSTRUCTOR}, content_type='application/json',
         )
         admin_response = self.client.patch(
-            reverse('me'), {'role': User.Role.SUPER_ADMIN}, content_type='application/json',
+            reverse('me'),
+            {'role': User.Role.SUPER_ADMIN, 'is_super_admin': True},
+            content_type='application/json',
         )
 
         self.assertEqual(instructor_response.status_code, 200)
         self.assertEqual(admin_response.status_code, 200)
         self.user.refresh_from_db()
         self.assertEqual(self.user.role, User.Role.STUDENT)
+        self.assertFalse(self.user.is_super_admin)
 
     def test_instructor_cannot_change_role_to_admin(self):
         instructor = User.objects.create_user(

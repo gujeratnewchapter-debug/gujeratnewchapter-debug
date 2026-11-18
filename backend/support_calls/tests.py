@@ -5,6 +5,7 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -14,6 +15,30 @@ from .models import SupportCallRequest
 
 
 User = get_user_model()
+
+
+class SupportCallAdminSiteTests(TestCase):
+    def test_support_requests_are_visible_in_django_admin_with_portal_queue_link(self):
+        admin = User.objects.create_superuser(
+            username='support-admin-site',
+            email='support-admin-site@example.com',
+            password='Password123!',
+        )
+        call = SupportCallRequest.objects.create(
+            display_name='Waiting Caller',
+            email='waiting@example.com',
+            mode=SupportCallRequest.Mode.VIDEO,
+            capability_hash=hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
+            room_name=f'support-admin-{uuid.uuid4().hex}',
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse('admin:support_calls_supportcallrequest_changelist'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, call.display_name)
+        self.assertContains(response, 'Open support queue')
 
 
 @override_settings(REST_FRAMEWORK={

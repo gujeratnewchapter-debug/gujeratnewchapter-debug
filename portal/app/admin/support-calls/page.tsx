@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, BellOff, Headphones, LoaderCircle, Phone, RefreshCw, Video, X } from 'lucide-react';
-import { useAuth } from '@/lib/auth-context';
+import { isSuperAdminUser, useAuth } from '@/lib/auth-context';
 import {
   getAdminSupportCalls,
   getSupportCallError,
@@ -38,7 +38,7 @@ function playIncomingRingtone(context: AudioContext) {
 export default function AdminSupportCallsPage() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const isAdmin = user?.role === 'super_admin';
+  const isAdmin = isSuperAdminUser(user);
   const [calls, setCalls] = useState<SupportCallState[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -105,9 +105,16 @@ export default function AdminSupportCallsPage() {
     try {
       const context = audioContextRef.current ?? new AudioContext();
       audioContextRef.current = context;
-      await context.resume();
-      audioContextRef.current = context;
+      const resumeAudio = context.resume();
+      const notificationPermission = 'Notification' in window && Notification.permission === 'default'
+        ? Notification.requestPermission().catch(() => 'denied' as NotificationPermission)
+        : Promise.resolve('Notification' in window ? Notification.permission : 'denied');
+      await resumeAudio;
+      const permission = await notificationPermission;
       setSoundEnabled(true);
+      if (permission === 'denied') {
+        setSoundError('Sound is on, but browser notifications are blocked. Allow notifications for this site in your browser settings.');
+      }
     } catch {
       setSoundError('Call sound could not be enabled. Check your browser audio settings and try again.');
     }
@@ -155,7 +162,7 @@ export default function AdminSupportCallsPage() {
         <div className={styles.headerActions}>
           <button type="button" className={soundEnabled ? styles.soundEnabled : styles.refresh} onClick={() => void toggleCallSound()} aria-pressed={soundEnabled}>
             {soundEnabled ? <Bell size={15} /> : <BellOff size={15} />}
-            {soundEnabled ? 'Sound on' : 'Enable call sound'}
+            {soundEnabled ? 'Alerts & sound on' : 'Enable alerts & sound'}
           </button>
           <button type="button" className={styles.refresh} onClick={() => void refresh()} disabled={loading}>
             <RefreshCw size={15} className={loading ? styles.spinner : ''} /> Refresh
@@ -167,7 +174,7 @@ export default function AdminSupportCallsPage() {
         <span className={styles.liveDot} />
         Queue updates every 6 seconds
         <span>•</span>
-        {soundEnabled ? 'Incoming call sound enabled' : 'Enable call sound to hear new requests'}
+        {soundEnabled ? 'Incoming call sound enabled' : 'Enable alerts and sound here'}
         <span>•</span>
         Visitors wait up to 10 minutes for an administrator
       </div>

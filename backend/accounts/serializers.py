@@ -42,12 +42,14 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    is_super_admin = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'phone_number', 'bio', 'avatar', 'is_email_verified',
-            'created_at',
+            'is_super_admin', 'created_at',
         ]
         read_only_fields = ['id', 'role', 'is_email_verified', 'created_at']
 

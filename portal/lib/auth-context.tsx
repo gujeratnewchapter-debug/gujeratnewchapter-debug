@@ -21,6 +21,7 @@ export interface User {
   first_name: string;
   last_name: string;
   role: Role;
+  is_super_admin?: boolean;
   is_email_verified: boolean;
   avatar?: string | null;
   phone_number?: string;
@@ -65,9 +66,14 @@ function normalizeSupabaseUser(rawUser: any): User | null {
     first_name: fullName.split(' ')[0] || '',
     last_name: fullName.split(' ').slice(1).join(' ') || '',
     role,
+    is_super_admin: false,
     is_email_verified: !!rawUser.email_confirmed_at,
     avatar: rawUser.user_metadata?.avatar_url || null,
   };
+}
+
+export function isSuperAdminUser(user?: Pick<User, 'role' | 'is_super_admin'> | null) {
+  return user?.role === 'super_admin' || user?.is_super_admin === true;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
