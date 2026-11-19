@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 from accounts.models import User
 from courses.models import Course
+from news.models import Article, Notice
+from site_settings.models import PageContent, PageSection, SiteSettings
 from .models import Conversation, KnowledgeDocument, Message
 from .services import AIServiceUnavailable, get_ai_reply, retrieve_context, retrieve_support_context
 from .serializers import ConversationSerializer, KnowledgeDocumentSerializer
@@ -190,6 +192,76 @@ class KnowledgeRetrievalTests(TestCase):
 		self.assertNotIn('Funding Options', catalog_context)
 		self.assertNotIn('Customer Discovery', unrelated_context)
 		self.assertNotIn('Funding Options', unrelated_context)
+
+	def test_public_support_context_includes_published_site_content_and_excludes_unpublished_content(self):
+		Article.objects.create(
+			title='Startup Funding Update',
+			short_description='A public update about funding.',
+			content='<p>Public grant applications open in June.</p><script>privateCode()</script>',
+			category='Funding',
+			is_published=True,
+		)
+		Article.objects.create(
+			title='Internal Draft Update',
+			short_description='Do not show.',
+			content='Unpublished staff-only notes.',
+			category='Internal',
+			is_published=False,
+		)
+		Notice.objects.create(
+			title='Enrollment Notice',
+			body='Applications close at the end of July.',
+			is_published=True,
+		)
+		Notice.objects.create(
+			title='Private Notice',
+			body='Draft administrative notice.',
+			is_published=False,
+		)
+		PageContent.objects.create(
+			slug='ai-test-public-page',
+			title='About ESS',
+			description='A public entrepreneurship school.',
+			content={'en': {'mission': 'Support Ethiopian founders.'}},
+			is_published=True,
+		)
+		PageContent.objects.create(
+			slug='ai-test-internal-page',
+			title='Internal Page',
+			description='Private draft copy.',
+			is_published=False,
+		)
+		public_page = PageContent.objects.get(slug='ai-test-public-page')
+		PageSection.objects.create(
+			page=public_page,
+			key='programs',
+			title='Programs',
+			body='Programs help founders validate ideas.',
+			is_published=True,
+		)
+		PageSection.objects.create(
+			page=public_page,
+			key='draft-program',
+			body='Unpublished section secret.',
+			is_published=False,
+		)
+		settings = SiteSettings.load()
+		settings.phone = '+251 11 123 4567'
+		settings.bank_account_number = 'DO-NOT-INCLUDE-PRIVATE-PAYMENT-DATA'
+		settings.save()
+
+		context, _sources = retrieve_support_context('ESS website courses news notices contact')
+
+		self.assertIn('Public grant applications open in June', context)
+		self.assertNotIn('privateCode', context)
+		self.assertNotIn('Internal Draft Update', context)
+		self.assertIn('Applications close at the end of July', context)
+		self.assertNotIn('Private Notice', context)
+		self.assertIn('Support Ethiopian founders', context)
+		self.assertIn('Programs help founders validate ideas', context)
+		self.assertNotIn('Unpublished section secret', context)
+		self.assertIn('+251 11 123 4567', context)
+		self.assertNotIn('DO-NOT-INCLUDE-PRIVATE-PAYMENT-DATA', context)
 
 
 class AIMessageTests(APITestCase):

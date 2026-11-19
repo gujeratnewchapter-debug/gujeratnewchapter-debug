@@ -9,9 +9,12 @@ without changing the chat API or citation format.
 import math
 import re
 from collections import Counter
+from html.parser import HTMLParser
 
 from courses.models import Course
 from django.conf import settings
+from news.models import Article, Notice
+from site_settings.models import PageContent, SiteSettings
 from .models import KnowledgeDocument
 
 
@@ -41,6 +44,43 @@ def _retrieval_tokens(text):
         for token in re.findall(r'\w+', text.casefold())
         if len(token) > 1 and token not in RETRIEVAL_STOP_WORDS
     ]
+
+
+def _plain_public_text(value):
+    if not value:
+        return ''
+    parser = _PublicTextParser()
+    parser.feed(str(value))
+    return re.sub(r'\s+', ' ', ' '.join(parser.parts)).strip()
+
+
+class _PublicTextParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.ignored_tag_depth = 0
+
+    def handle_starttag(self, tag, _attrs):
+        if tag in ('script', 'style'):
+            self.ignored_tag_depth += 1
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style') and self.ignored_tag_depth:
+            self.ignored_tag_depth -= 1
+
+    def handle_data(self, data):
+        if not self.ignored_tag_depth:
+            self.parts.append(data)
+
+
+def _flatten_public_content(value):
+    if isinstance(value, dict):
+        return ' '.join(_flatten_public_content(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return ' '.join(_flatten_public_content(item) for item in value)
+    if isinstance(value, str):
+        return _plain_public_text(value)
+    return ''
 
 
 SYSTEM_PROMPTS = {
@@ -75,8 +115,10 @@ SYSTEM_PROMPTS = {
         "private learner information. Never ask for passwords, verification codes, payment "
         "details, or other sensitive personal information. For account-specific issues or "
         "questions you cannot resolve, say so clearly and direct the person to ESS human "
-        "support. Only state ESS-specific course offerings, policies, prices, deadlines, "
-        "or program details when supported by the supplied public knowledge context; "
+        "support. Use the supplied current public website context, which may include the "
+        "published course catalog, public course curriculum, published pages, news, "
+        "notices, and global policies. Only state ESS-specific course offerings, policies, "
+        "prices, deadlines, or program details when supported by that public context; "
         "otherwise say you don't know and direct the visitor to the relevant ESS page. "
         "Never infer or invent offerings from general industry knowledge. You may offer "
         "brief general learning or startup guidance, but clearly separate it from official "
@@ -165,61 +207,131 @@ def retrieve_context(query, course=None, top_k=3, public_only=False):
     return context_text, sources
 
 
-def retrieve_support_context(query, top_k=8):
-    """Build public-only support context from policy documents and the published catalog."""
-    context_text, sources = retrieve_context(query, top_k=3, public_only=True)
-    query_tokens = set(_retrieval_tokens(query))
-    normalized_query = ' '.join(query.casefold().split())
-    catalog_browse = any(phrase in normalized_query for phrase in (
-        'course catalog',
-        'course list',
-        'course offerings',
-        'courses offered',
-        'available courses',
-        'what courses',
-        'which courses',
-        'what kinds of courses',
-        'what can i learn',
-    ))
-    courses = Course.objects.filter(
+def retrieve_support_context(query, max_characters=16000):
+    """Search live, publicly visible ESS content without exposing private records."""
+    policy_context, sources = retrieve_context(query, top_k=8, public_only=True)
+    entries = []
+
+    for course in Course.objects.filter(
         status=Course.Status.PUBLISHED,
-    ).select_related('category')
+    ).select_related('category').prefetch_related('sections__lessons'):
+        details = [
+            f'Course: {course.title}',
+            f'URL: /courses/{course.slug}',
+            f'Category: {course.category.name}' if course.category else '',
+            f'Subtitle: {course.subtitle}',
+            f'Description: {course.short_description or course.description}',
+            f'Learning objectives: {course.learning_objectives}',
+            f'Requirements: {course.requirements}',
+            f'Target audience: {course.target_audience}',
+            f'Tags: {course.tags}',
+            f'Level: {course.get_level_display()}',
+            f'Language: {course.language}',
+            f'Price: {"Free" if course.is_free else f"{course.price} ETB"}',
+            f'Duration: {course.duration_hours} hours' if course.duration_hours else '',
+        ]
+        curriculum = [
+            f'{section.title}: {", ".join(lesson.title for lesson in section.lessons.all())}'
+            for section in course.sections.all()
+        ]
+        details.extend(f'Curriculum: {item}' for item in curriculum)
+        entries.append(('course', course.title, _plain_public_text(' '.join(details))))
 
-    ranked_courses = []
-    for course in courses:
-        searchable_text = ' '.join(filter(None, (
-            course.title,
-            course.subtitle,
-            course.short_description,
-            course.category.name if course.category else '',
-            course.tags,
-        )))
-        score = len(query_tokens & set(_retrieval_tokens(searchable_text)))
-        ranked_courses.append((score, course))
+    for article in Article.objects.filter(is_published=True).order_by('-published_at', '-created_at'):
+        entries.append((
+            'news article',
+            article.title,
+            _plain_public_text(
+                f'News article: {article.title}. URL: /news/{article.slug}. '
+                f'Category: {article.category}. Summary: {article.short_description}. '
+                f'Content: {article.content}'
+            ),
+        ))
 
-    ranked_courses.sort(key=lambda item: (-item[0], item[1].title.casefold()))
-    if not catalog_browse:
-        ranked_courses = [item for item in ranked_courses if item[0] > 0]
-    catalog_lines = []
-    for _, course in ranked_courses[:top_k]:
-        description = course.short_description or course.subtitle
-        details = [course.title]
-        if course.category:
-            details.append(f'Category: {course.category.name}')
-        if description:
-            details.append(f'Description: {description[:500]}')
-        details.append(f'Level: {course.get_level_display()}')
-        details.append(f'Language: {course.language}')
-        details.append('Price: Free' if course.is_free else f'Price: {course.price} ETB')
-        if course.duration_hours:
-            details.append(f'Duration: {course.duration_hours} hours')
-        catalog_lines.append('- ' + '; '.join(details))
+    for notice in Notice.objects.filter(is_published=True).order_by('-created_at'):
+        entries.append((
+            'public notice',
+            notice.title,
+            _plain_public_text(
+                f'Public notice: {notice.title}. URL: /notices/{notice.slug}. {notice.body}'
+            ),
+        ))
 
-    if catalog_lines:
-        catalog_context = 'Published public course catalog:\n' + '\n'.join(catalog_lines)
-        context_text = '\n\n'.join(part for part in (context_text, catalog_context) if part)
+    pages = PageContent.objects.filter(is_published=True).prefetch_related('sections')
+    for page in pages:
+        page_details = [
+            f'Public website page: {page.title}',
+            f'URL: /{page.slug}' if page.slug != 'home' else 'URL: /',
+            page.description,
+            _flatten_public_content(page.content),
+        ]
+        for section in page.sections.filter(is_published=True):
+            page_details.extend((
+                section.title,
+                section.body,
+                section.cta_label,
+                f'Link: {section.cta_url}' if section.cta_url else '',
+                _flatten_public_content(section.content),
+            ))
+        entries.append(('website page', page.title, _plain_public_text(' '.join(page_details))))
 
-    return context_text, sources
+    site_settings = SiteSettings.objects.filter(pk=1).first()
+    if site_settings:
+        entries.append((
+            'ESS contact and overview',
+            site_settings.school_name,
+            _plain_public_text(' '.join((
+                f'Organization: {site_settings.school_name}',
+                f'Tagline: {site_settings.tagline}',
+                f'Home page: {site_settings.hero_title}',
+                site_settings.hero_subtitle,
+                f'Address: {site_settings.address}',
+                f'Phone: {site_settings.phone}',
+                f'Support email: {site_settings.support_email}',
+                f'Explore link: {site_settings.hero_cta_label} {site_settings.hero_cta_url}',
+                _flatten_public_content(site_settings.social_links),
+            ))),
+        ))
+
+    query_tokens = set(_retrieval_tokens(query))
+    query_tokens.update(token[:-1] for token in tuple(query_tokens) if len(token) > 4 and token.endswith('s'))
+    ranked_entries = []
+    for kind, title, content in entries:
+        content_tokens = set(_retrieval_tokens(content))
+        content_tokens.update(
+            token[:-1] for token in tuple(content_tokens)
+            if len(token) > 4 and token.endswith('s')
+        )
+        title_tokens = set(_retrieval_tokens(title))
+        title_tokens.update(
+            token[:-1] for token in tuple(title_tokens)
+            if len(token) > 4 and token.endswith('s')
+        )
+        score = len(query_tokens & content_tokens) + 2 * len(query_tokens & title_tokens)
+        if score:
+            ranked_entries.append((score, kind, title, content))
+
+    ranked_entries.sort(key=lambda item: (-item[0], item[1], item[2].casefold()))
+    if not ranked_entries:
+        ranked_entries = [(1, kind, title, content) for kind, title, content in entries]
+
+    selected = []
+    used_characters = 0
+    for _, kind, title, content in ranked_entries:
+        remaining = max_characters - used_characters
+        if remaining <= 0:
+            break
+        rendered = f'[{kind}: {title}]\n{content}'
+        if len(rendered) > remaining:
+            if remaining < 300:
+                break
+            rendered = rendered[:remaining]
+        selected.append(rendered)
+        used_characters += len(rendered)
+
+    website_context = '\n\n'.join(selected)
+    context_text = '\n\n'.join(part for part in (policy_context, website_context) if part)
+    return context_text[:max_characters], sources
 
 
 def get_ai_reply(mode, conversation_history, user_message, course=None):
