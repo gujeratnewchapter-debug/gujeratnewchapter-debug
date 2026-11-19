@@ -31,6 +31,8 @@ class SupportCallRequest(models.Model):
     mode = models.CharField(max_length=8, choices=Mode.choices)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
     capability_hash = models.CharField(max_length=64, unique=True, editable=False)
+    admin_session_hash = models.CharField(max_length=64, blank=True, default='')
+    admin_session_expires_at = models.DateTimeField(null=True, blank=True)
     room_name = models.CharField(max_length=64, unique=True, editable=False)
     handled_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

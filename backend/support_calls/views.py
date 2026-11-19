@@ -231,3 +231,83 @@ class SupportCallAdminTokenView(APIView):
         if credentials is None:
             return Response({'detail': 'Live support calling is not configured yet. Please try again later.'}, status=503)
         return _no_store_response(credentials)
+
+
+class SupportCallAdminSessionTicketView(APIView):
+    permission_classes = [IsSuperAdmin]
+
+    def post(self, request, call_id):
+        call = SupportCallRequest.objects.filter(pk=call_id).first()
+        if call is None:
+            return Response({'detail': 'Support call not found.'}, status=404)
+        if call.status != SupportCallRequest.Status.ACCEPTED:
+            return Response({'detail': 'Accept this call before joining it.'}, status=409)
+
+        capability = secrets.token_urlsafe(32)
+        call.admin_session_hash = _capability_digest(capability)
+        call.admin_session_expires_at = timezone.now() + timedelta(minutes=30)
+        call.save(update_fields=('admin_session_hash', 'admin_session_expires_at', 'updated_at'))
+        return _no_store_response({'call_id': str(call.id), 'capability': capability})
+
+
+def _admin_session_call(call_id, data):
+    serializer = SupportCallCapabilitySerializer(data={**data, 'call_id': call_id})
+    serializer.is_valid(raise_exception=True)
+    values = serializer.validated_data
+    call = SupportCallRequest.objects.filter(pk=values['call_id']).first()
+    if (
+        call is None
+        or not call.admin_session_hash
+        or call.admin_session_expires_at is None
+        or call.admin_session_expires_at <= timezone.now()
+        or not compare_digest(call.admin_session_hash, _capability_digest(values['capability']))
+    ):
+        return None
+    return call
+
+
+class SupportCallAdminSessionView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, call_id):
+        call = _admin_session_call(call_id, request.data)
+        if call is None:
+            return Response({'detail': 'Administrator call access has expired. Return to the support queue.'}, status=403)
+        call.expire_if_needed()
+        return _no_store_response(_public_status(call))
+
+
+class SupportCallAdminSessionTokenView(APIView):
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [SupportCallAdminTokenThrottle]
+    throttle_scope = 'support_call_admin_token'
+
+    def post(self, request, call_id):
+        call = _admin_session_call(call_id, request.data)
+        if call is None:
+            return Response({'detail': 'Administrator call access has expired. Return to the support queue.'}, status=403)
+        if call.status != SupportCallRequest.Status.ACCEPTED:
+            return Response({'detail': f'This call is {call.status}; a connection token is not available.'}, status=409)
+        credentials = _make_token(call, f'support-admin-{call.handled_by_id or call.pk}', is_admin=True)
+        if credentials is None:
+            return Response({'detail': 'Live support calling is not configured yet. Please try again later.'}, status=503)
+        return _no_store_response(credentials)
+
+
+class SupportCallAdminSessionEndView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, call_id):
+        with transaction.atomic():
+            call = SupportCallRequest.objects.select_for_update().filter(pk=call_id).first()
+            if call is None:
+                return Response({'detail': 'Support call not found.'}, status=404)
+            session_call = _admin_session_call(call_id, request.data)
+            if session_call is None:
+                return Response({'detail': 'Administrator call access has expired. Return to the support queue.'}, status=403)
+            if call.status != SupportCallRequest.Status.ACCEPTED:
+                return Response({'detail': 'This call has already ended.'}, status=409)
+            call.status = SupportCallRequest.Status.ENDED
+            call.ended_at = timezone.now()
+            call.save(update_fields=('status', 'ended_at', 'updated_at'))
+        return _no_store_response(_public_status(call))

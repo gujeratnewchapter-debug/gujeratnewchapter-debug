@@ -19,11 +19,14 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { Room, RoomEvent, Track } from 'livekit-client';
-import { useAuth } from '@/lib/auth-context';
+import { isSuperAdminUser, useAuth } from '@/lib/auth-context';
 import { enableSupportCallAudio, startSupportCallRingback } from '@/lib/support-call-audio';
 import {
   getAdminSupportCall,
+  getAdminSessionCall,
+  getAdminSessionCallToken,
   getAdminSupportCallToken,
+  endAdminSessionCall,
   getSupportCallError,
   getSupportCallStatus,
   getSupportCallToken,
@@ -89,6 +92,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
   const { user, isLoading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [capability, setCapability] = useState('');
+  const [adminSessionCapability, setAdminSessionCapability] = useState('');
   const [call, setCall] = useState<SupportCallState | null>(null);
   const [phase, setPhase] = useState<RoomPhase>('waiting');
   const [loading, setLoading] = useState(true);
@@ -109,8 +113,18 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   useEffect(() => {
-    const adminMode = new URLSearchParams(window.location.search).get('admin') === '1';
+    const params = new URLSearchParams(window.location.search);
+    const adminTicket = new URLSearchParams(window.location.hash.slice(1)).get('admin_ticket') || '';
+    const storedAdminSession = window.sessionStorage.getItem(`ess-support-admin:${callId}`) || '';
+    const adminMode = params.get('admin') === '1' || Boolean(adminTicket || storedAdminSession);
     setIsAdmin(adminMode);
+    if (adminTicket) {
+      window.sessionStorage.setItem(`ess-support-admin:${callId}`, adminTicket);
+      setAdminSessionCapability(adminTicket);
+      window.history.replaceState(null, '', window.location.pathname);
+    } else if (storedAdminSession) {
+      setAdminSessionCapability(storedAdminSession);
+    }
     if (!adminMode) {
       setCapability(window.sessionStorage.getItem(`ess-support-call:${callId}`) || '');
     }
@@ -119,7 +133,9 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
   const refreshCall = useCallback(async () => {
     try {
       const { data } = isAdmin
-        ? await getAdminSupportCall(callId)
+        ? adminSessionCapability
+          ? await getAdminSessionCall(callId, adminSessionCapability)
+          : await getAdminSupportCall(callId)
         : await getSupportCallStatus(callId, capability);
       setCall(data);
       setError('');
@@ -127,7 +143,11 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
         manualLeaveRef.current = true;
         roomRef.current?.disconnect();
         roomRef.current = null;
-        if (!isAdmin) window.sessionStorage.removeItem(`ess-support-call:${callId}`);
+        if (isAdmin) {
+          window.sessionStorage.removeItem(`ess-support-admin:${callId}`);
+        } else {
+          window.sessionStorage.removeItem(`ess-support-call:${callId}`);
+        }
         setPhase('ended');
       }
     } catch (requestError) {
@@ -138,7 +158,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     } finally {
       setLoading(false);
     }
-  }, [callId, capability, isAdmin]);
+  }, [adminSessionCapability, callId, capability, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin && !capability) {
@@ -146,8 +166,8 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
       setError('This private call link is not available in this browser session. Please submit a new request.');
       return;
     }
-    if (isAdmin && authLoading) return;
-    if (isAdmin && user?.role !== 'super_admin') {
+    if (isAdmin && !adminSessionCapability && authLoading) return;
+    if (isAdmin && !adminSessionCapability && !isSuperAdminUser(user)) {
       setLoading(false);
       setError('Administrator access is required to join this support call.');
       return;
@@ -157,7 +177,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
       if (phaseRef.current !== 'ended') void refreshCall();
     }, 8000);
     return () => window.clearInterval(poll);
-  }, [authLoading, capability, isAdmin, refreshCall, user?.role]);
+  }, [adminSessionCapability, authLoading, capability, isAdmin, refreshCall, user]);
 
   useEffect(() => {
     if (phase !== 'connected' && phase !== 'reconnecting') return;
@@ -202,7 +222,9 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     let room: Room | null = null;
     try {
       const { data: credentials } = isAdmin
-        ? await getAdminSupportCallToken(callId)
+        ? adminSessionCapability
+          ? await getAdminSessionCallToken(callId, adminSessionCapability)
+          : await getAdminSupportCallToken(callId)
         : await getSupportCallToken(callId, capability);
       room = new Room({ adaptiveStream: true, dynacast: true });
       roomRef.current = room;
@@ -301,7 +323,11 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     setEnding(true);
     setError('');
     try {
-      await takeSupportCallAction(callId, 'end');
+      if (adminSessionCapability) {
+        await endAdminSessionCall(callId, adminSessionCapability);
+      } else {
+        await takeSupportCallAction(callId, 'end');
+      }
       manualLeaveRef.current = true;
       roomRef.current?.disconnect();
       roomRef.current = null;
@@ -320,7 +346,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
   const ended = call?.status === 'ended' || phase === 'ended';
   const connected = phase === 'connected' || phase === 'reconnecting';
 
-  if (isAdmin && !authLoading && user?.role !== 'super_admin') {
+  if (isAdmin && !adminSessionCapability && !authLoading && !isSuperAdminUser(user)) {
     return (
       <main className={styles.statePage}>
         <div className={styles.stateIcon}><ShieldCheck size={23} /></div>
@@ -331,7 +357,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     );
   }
 
-  if (loading || (isAdmin && authLoading)) {
+  if (loading || (isAdmin && !adminSessionCapability && authLoading)) {
     return <main className={styles.statePage}><LoaderCircle className={styles.spinner} /><p>Checking your support call…</p></main>;
   }
 

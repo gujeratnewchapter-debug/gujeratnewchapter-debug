@@ -7,9 +7,19 @@
 <div id="site-name">
   <a href="{% url 'admin:index' %}">{{ site_header|default:'Ethiopian Startup School Admin' }}</a>
 </div>
+<div
+  id="support-call-admin-config"
+  data-frontend-url="{{ support_call_frontend_url }}"
+  hidden
+></div>
 {% endblock %}
 
 {% block extrastyle %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'admin/custom/admin.css' %}">
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{{ support_call_admin_script_url }}" defer></script>
 {% endblock %}

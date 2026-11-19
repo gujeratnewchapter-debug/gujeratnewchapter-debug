@@ -39,6 +39,61 @@ class SupportCallAdminSiteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, call.display_name)
         self.assertContains(response, 'Open support queue')
+        self.assertContains(response, '/static/support_calls/admin_support_calls.js')
+
+    @override_settings(
+        LIVEKIT_URL='wss://live.example.com',
+        LIVEKIT_API_KEY='test-livekit-key',
+        LIVEKIT_API_SECRET='test-livekit-secret',
+    )
+    def test_django_admin_session_can_monitor_accept_and_create_a_private_join_ticket(self):
+        admin = User.objects.create_superuser(
+            username='support-admin-alerts',
+            email='support-admin-alerts@example.com',
+            password='Password123!',
+        )
+        call = SupportCallRequest.objects.create(
+            display_name='Caller From Admin Session',
+            email='caller@example.com',
+            mode=SupportCallRequest.Mode.VIDEO,
+            capability_hash=hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
+            room_name=f'support-admin-session-{uuid.uuid4().hex}',
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        self.client.force_login(admin)
+
+        queue = self.client.get(reverse('support-call-admin-queue'))
+        accept = self.client.post(
+            reverse('support-call-admin-action', args=(call.id, 'accept')),
+            data='{}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(queue.status_code, 200)
+        self.assertEqual(accept.status_code, 200)
+        self.assertEqual(accept.data['status'], SupportCallRequest.Status.ACCEPTED)
+
+        ticket = self.client.post(
+            reverse('support-call-admin-session-ticket', args=(call.id,)),
+            data='{}',
+            content_type='application/json',
+        )
+        session_status = self.client.post(
+            reverse('support-call-admin-session-status', args=(call.id,)),
+            {'capability': ticket.data['capability']},
+            content_type='application/json',
+        )
+        session_token = self.client.post(
+            reverse('support-call-admin-session-token', args=(call.id,)),
+            {'capability': ticket.data['capability']},
+            content_type='application/json',
+        )
+        self.assertEqual(ticket.status_code, 200)
+        call.refresh_from_db()
+        self.assertEqual(call.admin_session_hash, hashlib.sha256(ticket.data['capability'].encode()).hexdigest())
+        self.assertEqual(session_status.status_code, 200)
+        self.assertEqual(session_status.data['status'], SupportCallRequest.Status.ACCEPTED)
+        self.assertEqual(session_token.status_code, 200)
 
 
 @override_settings(REST_FRAMEWORK={

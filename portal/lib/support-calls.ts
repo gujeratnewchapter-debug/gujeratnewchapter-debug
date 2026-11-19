@@ -28,6 +28,11 @@ export interface SupportCallCredentials {
   url: string;
 }
 
+export interface SupportCallAdminSession {
+  call_id: string;
+  capability: string;
+}
+
 export function createSupportCall(payload: {
   display_name: string;
   email: string;
@@ -65,6 +70,22 @@ export function takeSupportCallAction(callId: string, action: 'accept' | 'reject
 
 export function getAdminSupportCallToken(callId: string) {
   return apiClient.post<SupportCallCredentials>(`/support-calls/admin/${callId}/token/`);
+}
+
+export function createAdminSupportCallSession(callId: string) {
+  return apiClient.post<SupportCallAdminSession>(`/support-calls/admin/${callId}/session-ticket/`);
+}
+
+export function getAdminSessionCall(callId: string, capability: string) {
+  return apiClient.post<SupportCallState>(`/support-calls/admin-session/${callId}/status/`, { capability });
+}
+
+export function getAdminSessionCallToken(callId: string, capability: string) {
+  return apiClient.post<SupportCallCredentials>(`/support-calls/admin-session/${callId}/token/`, { capability });
+}
+
+export function endAdminSessionCall(callId: string, capability: string) {
+  return apiClient.post<SupportCallState>(`/support-calls/admin-session/${callId}/end/`, { capability });
 }
 
 export function getSupportCallError(error: unknown, fallback: string) {
