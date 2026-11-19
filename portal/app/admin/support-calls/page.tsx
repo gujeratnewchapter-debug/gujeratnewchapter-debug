@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Headphones, LoaderCircle, Phone, RefreshCw, Video, X } from 'lucide-react';
+import { Bell, BellOff, Headphones, LoaderCircle, Phone, RefreshCw, Video } from 'lucide-react';
 import { isSuperAdminUser, useAuth } from '@/lib/auth-context';
 import {
   getAdminSupportCalls,
@@ -46,7 +46,6 @@ export default function AdminSupportCallsPage() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [soundError, setSoundError] = useState('');
   const audioContextRef = useRef<AudioContext | null>(null);
-  const [incomingCall, setIncomingCall] = useState<SupportCallState | null>(null);
   const alertedCallIds = useRef(new Set<string>());
   const pending = calls.filter((call) => call.status === 'pending');
   const pendingCount = pending.length;
@@ -56,16 +55,6 @@ export default function AdminSupportCallsPage() {
     try {
       const { data } = await getAdminSupportCalls();
       setCalls(data);
-      setIncomingCall((current) => {
-        if (current && data.some((call) => call.call_id === current.call_id && call.status === 'pending')) {
-          return current;
-        }
-        const nextCall = data.find((call) => (
-          call.status === 'pending' && !alertedCallIds.current.has(call.call_id)
-        ));
-        if (nextCall) alertedCallIds.current.add(nextCall.call_id);
-        return nextCall ?? null;
-      });
       setError('');
     } catch (requestError) {
       setError(getSupportCallError(requestError, 'Could not load the support queue. Please try again.'));
@@ -80,6 +69,25 @@ export default function AdminSupportCallsPage() {
     const timer = window.setInterval(() => { void refresh(); }, 6000);
     return () => window.clearInterval(timer);
   }, [isAdmin, isLoading, refresh]);
+
+  useEffect(() => {
+    pending.forEach((call) => {
+      if (alertedCallIds.current.has(call.call_id)) return;
+      if (!soundEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+
+      alertedCallIds.current.add(call.call_id);
+      const notification = new Notification(`Incoming ${call.mode_label || call.mode} call`, {
+        body: `${call.display_name}${call.question ? `: ${call.question}` : ''}`,
+        tag: `ess-support-call-${call.call_id}`,
+        requireInteraction: false,
+      });
+      notification.onclick = () => {
+        window.focus();
+        document.getElementById(`support-call-${call.call_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        notification.close();
+      };
+    });
+  }, [pending, soundEnabled]);
 
   useEffect(() => {
     const context = audioContextRef.current;
@@ -182,34 +190,6 @@ export default function AdminSupportCallsPage() {
       {error && <div className={styles.error} role="alert">{error}</div>}
       {soundError && <div className={styles.error} role="alert">{soundError}</div>}
 
-      {incomingCall && (
-        <div className={styles.incomingBackdrop}>
-          <section className={styles.incomingDialog} role="alertdialog" aria-modal="true" aria-labelledby="incoming-call-title" aria-describedby="incoming-call-description">
-            <button type="button" className={styles.dismissIncoming} onClick={() => setIncomingCall(null)} aria-label="Dismiss incoming call alert">
-              <X size={18} />
-            </button>
-            <div className={styles.incomingIcon}>
-              {incomingCall.mode === 'video' ? <Video size={24} /> : <Phone size={24} />}
-            </div>
-            <div className={styles.incomingEyebrow}>INCOMING SUPPORT CALL</div>
-            <h2 id="incoming-call-title">{incomingCall.display_name}</h2>
-            <p id="incoming-call-description">
-              {incomingCall.mode_label || (incomingCall.mode === 'video' ? 'Video call' : 'Voice call')}
-              {incomingCall.email ? ` · ${incomingCall.email}` : ''}
-            </p>
-            {incomingCall.question && <div className={styles.incomingQuestion}>{incomingCall.question}</div>}
-            <div className={styles.incomingActions}>
-              <button type="button" className={styles.reject} onClick={() => void handleAction(incomingCall, 'reject')} disabled={busy !== null}>
-                {busy === `${incomingCall.call_id}:reject` ? 'Declining…' : 'Decline'}
-              </button>
-              <button type="button" className={styles.accept} onClick={() => void handleAction(incomingCall, 'accept')} disabled={busy !== null}>
-                {busy === `${incomingCall.call_id}:accept` ? <><LoaderCircle size={15} className={styles.spinner} /> Answering…</> : 'Answer call'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
       <section aria-labelledby="waiting-title" className={styles.section}>
         <div className={styles.sectionHeading}>
           <div><h2 id="waiting-title">Waiting for help</h2><span>{pending.length} {pending.length === 1 ? 'request' : 'requests'}</span></div>
@@ -221,7 +201,7 @@ export default function AdminSupportCallsPage() {
         ) : (
           <div className={styles.queueList}>
             {pending.map((call) => (
-              <article className={styles.callCard} key={call.call_id}>
+              <article className={styles.callCard} id={`support-call-${call.call_id}`} key={call.call_id}>
                 <div className={styles.callIdentity}>
                   <span className={styles.avatar}>{call.display_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
                   <div className={styles.caller}>
