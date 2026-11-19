@@ -6,7 +6,7 @@ from unittest.mock import patch
 from accounts.models import User
 from courses.models import Course
 from .models import Conversation, KnowledgeDocument, Message
-from .services import AIServiceUnavailable, get_ai_reply, retrieve_context
+from .services import AIServiceUnavailable, get_ai_reply, retrieve_context, retrieve_support_context
 from .serializers import ConversationSerializer, KnowledgeDocumentSerializer
 
 
@@ -137,6 +137,59 @@ class KnowledgeRetrievalTests(TestCase):
 		)
 
 		self.assertEqual(retrieve_context('how do I'), ('', []))
+
+	def test_public_support_context_includes_published_catalog_but_excludes_drafts_and_course_docs(self):
+		self.course.short_description = 'Practice customer discovery and validate startup ideas.'
+		self.course.category_id = None
+		self.course.save(update_fields=('short_description', 'category'))
+		Course.objects.create(
+			title='Funding Options',
+			slug='funding-options',
+			description='A published course about startup financing.',
+			instructor=self.owner,
+			status=Course.Status.PUBLISHED,
+		)
+		KnowledgeDocument.objects.create(
+			title='Private course notes',
+			source_type=KnowledgeDocument.SourceType.COURSE_MATERIAL,
+			course=self.course,
+			raw_text='Secret lesson content for enrolled learners only.',
+			is_indexed=True,
+		)
+		Course.objects.create(
+			title='Draft private course',
+			slug='draft-private-course',
+			description='Not publicly available.',
+			instructor=self.owner,
+			status=Course.Status.DRAFT,
+		)
+
+		context, _sources = retrieve_support_context('What kinds of courses are available?')
+
+		self.assertIn('Customer Discovery', context)
+		self.assertIn('Practice customer discovery', context)
+		self.assertIn('Funding Options', context)
+		self.assertNotIn('Draft private course', context)
+		self.assertNotIn('Secret lesson content', context)
+
+	def test_public_support_context_only_includes_relevant_courses_for_specific_questions(self):
+		self.course.short_description = 'Practice customer discovery and validate startup ideas.'
+		self.course.save(update_fields=('short_description',))
+		Course.objects.create(
+			title='Funding Options',
+			slug='funding-options-specific',
+			description='A published course about startup financing.',
+			instructor=self.owner,
+			status=Course.Status.PUBLISHED,
+		)
+
+		catalog_context, _sources = retrieve_support_context('customer discovery')
+		unrelated_context, _unrelated_sources = retrieve_support_context('How do I reset my password?')
+
+		self.assertIn('Customer Discovery', catalog_context)
+		self.assertNotIn('Funding Options', catalog_context)
+		self.assertNotIn('Customer Discovery', unrelated_context)
+		self.assertNotIn('Funding Options', unrelated_context)
 
 
 class AIMessageTests(APITestCase):
