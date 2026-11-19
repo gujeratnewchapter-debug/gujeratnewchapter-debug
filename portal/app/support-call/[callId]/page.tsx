@@ -18,7 +18,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import { Room, RoomEvent, Track } from 'livekit-client';
+import { Room, RoomEvent, Track, VideoPresets } from 'livekit-client';
 import { isSuperAdminUser, useAuth } from '@/lib/auth-context';
 import { enableSupportCallAudio, startSupportCallRingback } from '@/lib/support-call-audio';
 import {
@@ -30,6 +30,8 @@ import {
   getSupportCallError,
   getSupportCallStatus,
   getSupportCallToken,
+  getStudentSupportCall,
+  getStudentSupportCallToken,
   SupportCallState,
   takeSupportCallAction,
 } from '@/lib/support-calls';
@@ -62,7 +64,7 @@ function errorText(error: unknown, fallback: string) {
   return getSupportCallError(error, fallback);
 }
 
-function VideoSurface({ track, label, audio = false }: { track: any; label: string; audio?: boolean }) {
+function VideoSurface({ track, label, audio = false, mirrored = false }: { track: any; label: string; audio?: boolean; mirrored?: boolean }) {
   const elementRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -75,14 +77,16 @@ function VideoSurface({ track, label, audio = false }: { track: any; label: stri
     } else {
       element.autoplay = true;
       element.playsInline = true;
-      element.className = styles.videoElement;
+      element.className = mirrored
+        ? `${styles.videoElement} ${styles.localVideoElement}`
+        : styles.videoElement;
     }
     elementRef.current.appendChild(element);
     return () => {
       track.detach(element);
       element.remove();
     };
-  }, [audio, label, track]);
+  }, [audio, label, mirrored, track]);
 
   return <div ref={elementRef} className={audio ? styles.audioMount : styles.videoMount} />;
 }
@@ -90,7 +94,9 @@ function VideoSurface({ track, label, audio = false }: { track: any; label: stri
 export default function SupportCallRoomPage({ params }: { params: { callId: string } }) {
   const callId = params.callId;
   const { user, isLoading: authLoading } = useAuth();
+  const [modeReady, setModeReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isStudentRecipient, setIsStudentRecipient] = useState(false);
   const [capability, setCapability] = useState('');
   const [adminSessionCapability, setAdminSessionCapability] = useState('');
   const [call, setCall] = useState<SupportCallState | null>(null);
@@ -109,6 +115,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
   const roomRef = useRef<Room | null>(null);
   const manualLeaveRef = useRef(false);
   const phaseRef = useRef<RoomPhase>(phase);
+  const autoJoinStartedRef = useRef(false);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
@@ -117,17 +124,20 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     const adminTicket = new URLSearchParams(window.location.hash.slice(1)).get('admin_ticket') || '';
     const storedAdminSession = window.sessionStorage.getItem(`ess-support-admin:${callId}`) || '';
     const adminMode = params.get('admin') === '1' || Boolean(adminTicket || storedAdminSession);
+    const studentMode = params.get('student') === '1';
     setIsAdmin(adminMode);
+    setIsStudentRecipient(studentMode);
     if (adminTicket) {
       window.sessionStorage.setItem(`ess-support-admin:${callId}`, adminTicket);
       setAdminSessionCapability(adminTicket);
-      window.history.replaceState(null, '', window.location.pathname);
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
     } else if (storedAdminSession) {
       setAdminSessionCapability(storedAdminSession);
     }
     if (!adminMode) {
       setCapability(window.sessionStorage.getItem(`ess-support-call:${callId}`) || '');
     }
+    setModeReady(true);
   }, [callId]);
 
   const refreshCall = useCallback(async () => {
@@ -136,7 +146,9 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
         ? adminSessionCapability
           ? await getAdminSessionCall(callId, adminSessionCapability)
           : await getAdminSupportCall(callId)
-        : await getSupportCallStatus(callId, capability);
+        : isStudentRecipient
+          ? await getStudentSupportCall(callId)
+          : await getSupportCallStatus(callId, capability);
       setCall(data);
       setError('');
       if (data.status === 'ended' || data.status === 'rejected' || data.status === 'expired') {
@@ -158,15 +170,16 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     } finally {
       setLoading(false);
     }
-  }, [adminSessionCapability, callId, capability, isAdmin]);
+  }, [adminSessionCapability, callId, capability, isAdmin, isStudentRecipient]);
 
   useEffect(() => {
-    if (!isAdmin && !capability) {
+    if (!modeReady) return;
+    if (!isAdmin && !isStudentRecipient && !capability) {
       setLoading(false);
       setError('This private call link is not available in this browser session. Please submit a new request.');
       return;
     }
-    if (isAdmin && !adminSessionCapability && authLoading) return;
+    if ((isAdmin && !adminSessionCapability || isStudentRecipient) && authLoading) return;
     if (isAdmin && !adminSessionCapability && !isSuperAdminUser(user)) {
       setLoading(false);
       setError('Administrator access is required to join this support call.');
@@ -177,7 +190,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
       if (phaseRef.current !== 'ended') void refreshCall();
     }, 8000);
     return () => window.clearInterval(poll);
-  }, [adminSessionCapability, authLoading, capability, isAdmin, refreshCall, user]);
+  }, [adminSessionCapability, authLoading, capability, isAdmin, isStudentRecipient, modeReady, refreshCall, user]);
 
   useEffect(() => {
     if (phase !== 'connected' && phase !== 'reconnecting') return;
@@ -212,7 +225,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     });
   })();
 
-  async function connectToCall() {
+  const connectToCall = useCallback(async () => {
     if (!call || call.status !== 'accepted') return;
     setJoining(true);
     setError('');
@@ -225,8 +238,20 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
         ? adminSessionCapability
           ? await getAdminSessionCallToken(callId, adminSessionCapability)
           : await getAdminSupportCallToken(callId)
-        : await getSupportCallToken(callId, capability);
-      room = new Room({ adaptiveStream: true, dynacast: true });
+        : isStudentRecipient
+          ? await getStudentSupportCallToken(callId)
+          : await getSupportCallToken(callId, capability);
+      room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        videoCaptureDefaults: {
+          resolution: VideoPresets.h720.resolution,
+          facingMode: 'user',
+        },
+        publishDefaults: {
+          videoEncoding: VideoPresets.h720.encoding,
+        },
+      });
       roomRef.current = room;
       const refreshTracks = () => setMediaRevision((value) => value + 1);
       room.on(RoomEvent.TrackSubscribed, refreshTracks);
@@ -271,7 +296,20 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     } finally {
       setJoining(false);
     }
-  }
+  }, [adminSessionCapability, call, callId, capability, isAdmin, isStudentRecipient]);
+
+  useEffect(() => {
+    const shouldAutoJoin = new URLSearchParams(window.location.search).get('autojoin') === '1';
+    if (
+      !shouldAutoJoin
+      || !call
+      || call.status !== 'accepted'
+      || phase !== 'waiting'
+      || autoJoinStartedRef.current
+    ) return;
+    autoJoinStartedRef.current = true;
+    void connectToCall();
+  }, [call, connectToCall, phase]);
 
   async function toggleMicrophone() {
     const room = roomRef.current;
@@ -357,7 +395,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     );
   }
 
-  if (loading || (isAdmin && !adminSessionCapability && authLoading)) {
+  if (!modeReady || loading || (isAdmin && !adminSessionCapability && authLoading) || (isStudentRecipient && authLoading)) {
     return <main className={styles.statePage}><LoaderCircle className={styles.spinner} /><p>Checking your support call…</p></main>;
   }
 
@@ -448,7 +486,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
             <article key={participant.id} className={styles.participantTile}>
               {participant.videoTracks.length > 0
                 ? participant.videoTracks.map((track: any, index: number) => (
-                  <VideoSurface key={`${participant.id}:${index}`} track={track} label={`${participant.label} video`} />
+                  <VideoSurface key={`${participant.id}:${index}`} track={track} label={`${participant.label} video`} mirrored={participant.isLocal} />
                 ))
                 : <div className={styles.avatarFallback}><span>{initials(participant.label)}</span></div>}
               {participant.audioTracks.map((track: any, index: number) => (

@@ -5,7 +5,16 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Lightbulb, ChevronDown, Menu, X } from 'lucide-react';
 import { isSuperAdminUser, useAuth } from '@/lib/auth-context';
-import { getAdminSupportCalls, getSupportCallError, SupportCallState } from '@/lib/support-calls';
+import {
+  createAdminSupportCallSession,
+  getAdminSupportCalls,
+  getStudentSupportCalls,
+  getSupportCallError,
+  SupportCallState,
+  SupportCallStudentAccess,
+  takeStudentSupportCallAction,
+  takeSupportCallAction,
+} from '@/lib/support-calls';
 import { useFeatureFlag } from '@/lib/featureFlags';
 import { useI18n, LANGUAGES } from '@/lib/i18n';
 import { normalizePublicEnvironmentValue } from '@/lib/http-headers';
@@ -24,11 +33,12 @@ export function Navbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [pendingSupportCount, setPendingSupportCount] = useState(0);
-  const [incomingSupportCall, setIncomingSupportCall] = useState<SupportCallState | null>(null);
+  const [incomingStudentCall, setIncomingStudentCall] = useState<SupportCallStudentAccess | null>(null);
   const [supportCallAlertError, setSupportCallAlertError] = useState('');
   const pathname = usePathname();
   const router = useRouter();
   const notifiedSupportCallIds = useRef(new Set<string>());
+  const notifiedStudentCallIds = useRef(new Set<string>());
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -39,29 +49,39 @@ export function Navbar() {
         const { data } = await getAdminSupportCalls();
         if (!active) return;
         setSupportCallAlertError('');
-        const pending = data.filter((call) => call.status === 'pending');
+        const pending = data.filter((call) => (
+          call.status === 'pending' && call.direction !== 'admin_to_student'
+        ));
         setPendingSupportCount(pending.length);
         const pendingIds = new Set(pending.map((call) => call.call_id));
-        setIncomingSupportCall((current) => (
-          current && pendingIds.has(current.call_id) ? current : null
-        ));
         for (const call of pending) {
           if (notifiedSupportCallIds.current.has(call.call_id)) continue;
-          notifiedSupportCallIds.current.add(call.call_id);
-          if (!pathname?.startsWith('/admin/support-calls')) {
-            setIncomingSupportCall((current) => current ?? call);
-          }
+          if (pathname?.startsWith('/admin/support-calls')) continue;
+          if (window.localStorage.getItem('essSupportCallAlerts') !== 'enabled') continue;
           if (!('Notification' in window) || Notification.permission !== 'granted') continue;
+          notifiedSupportCallIds.current.add(call.call_id);
 
           const notification = new Notification('Incoming ESS support call', {
             body: `${call.display_name} is requesting a ${call.mode} call.`,
             tag: `ess-support-call-${call.call_id}`,
-            requireInteraction: true,
+            requireInteraction: false,
           });
-          notification.onclick = () => {
+          notification.onclick = async () => {
             window.focus();
-            router.push('/admin/support-calls');
             notification.close();
+            try {
+              await takeSupportCallAction(call.call_id, 'accept');
+              const { data: session } = await createAdminSupportCallSession(call.call_id);
+              const target = new URL(`/support-call/${call.call_id}?autojoin=1`, window.location.origin);
+              target.hash = new URLSearchParams({ admin_ticket: session.capability }).toString();
+              window.location.assign(target.toString());
+            } catch (requestError) {
+              console.error('Could not answer incoming support call:', requestError);
+              setSupportCallAlertError(getSupportCallError(
+                requestError,
+                'The incoming call could not be answered. Open the support-call queue.',
+              ));
+            }
           };
         }
         for (const callId of notifiedSupportCallIds.current) {
@@ -84,6 +104,81 @@ export function Navbar() {
       window.clearInterval(timer);
     };
   }, [isSuperAdmin, pathname, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'student') return;
+    let active = true;
+
+    const acceptStudentCall = async (call: SupportCallStudentAccess) => {
+      try {
+        await takeStudentSupportCallAction(call.call_id, 'accept');
+        setIncomingStudentCall(null);
+        window.location.assign(`/support-call/${call.call_id}?student=1&autojoin=1`);
+      } catch (requestError) {
+        console.error('Could not answer direct administrator call:', requestError);
+        setSupportCallAlertError(getSupportCallError(
+          requestError,
+          'This call could not be answered. It may have ended or expired.',
+        ));
+      }
+    };
+
+    const checkForDirectCalls = async () => {
+      try {
+        const { data } = await getStudentSupportCalls();
+        if (!active) return;
+        const pending = data.filter((call) => call.status === 'pending');
+        const pendingIds = new Set(pending.map((call) => call.call_id));
+        setIncomingStudentCall((current) => (
+          current && pendingIds.has(current.call_id) ? current : pending[0] ?? null
+        ));
+        pending.forEach((call) => {
+          if (notifiedStudentCallIds.current.has(call.call_id)) return;
+          if (!('Notification' in window) || Notification.permission !== 'granted') return;
+          notifiedStudentCallIds.current.add(call.call_id);
+
+          const notification = new Notification('Direct call from ESS', {
+            body: `An administrator is calling you by ${call.mode}.`,
+            tag: `ess-admin-call-${call.call_id}`,
+            requireInteraction: false,
+          });
+          notification.onclick = () => {
+            window.focus();
+            notification.close();
+            void acceptStudentCall(call);
+          };
+        });
+        for (const callId of notifiedStudentCallIds.current) {
+          if (!pendingIds.has(callId)) notifiedStudentCallIds.current.delete(callId);
+        }
+      } catch (requestError) {
+        if (!active) return;
+        console.error('Could not check direct administrator calls:', requestError);
+      }
+    };
+
+    void checkForDirectCalls();
+    const timer = window.setInterval(() => { void checkForDirectCalls(); }, 6000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [isAuthenticated, user?.role]);
+
+  async function handleStudentCallAction(call: SupportCallStudentAccess, action: 'accept' | 'reject') {
+    try {
+      await takeStudentSupportCallAction(call.call_id, action);
+      setIncomingStudentCall(null);
+      if (action === 'accept') {
+        window.location.assign(`/support-call/${call.call_id}?student=1&autojoin=1`);
+      }
+    } catch (requestError) {
+      setSupportCallAlertError(getSupportCallError(
+        requestError,
+        'This call could not be updated. It may have ended or expired.',
+      ));
+    }
+  }
 
   function avatarSource(avatar?: string | null) {
     if (!avatar) return null;
@@ -266,7 +361,7 @@ export function Navbar() {
         )}
       </header>
 
-      {incomingSupportCall && !pathname?.startsWith('/admin/support-calls') && (
+      {incomingStudentCall && !pathname?.startsWith('/support-call/') && (
         <aside
           role="alert"
           style={{
@@ -283,21 +378,18 @@ export function Navbar() {
           }}
         >
           <strong style={{ display: 'block', color: '#123b5d', fontSize: 14 }}>
-            Incoming {incomingSupportCall.mode} support call
+            Direct {incomingStudentCall.mode} call from ESS
           </strong>
           <span style={{ display: 'block', marginTop: 5, color: '#64757d', fontSize: 12 }}>
-            {incomingSupportCall.display_name} is waiting for an administrator.
+            {incomingStudentCall.display_name} is calling you.
           </span>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
-            <button type="button" className="btn" onClick={() => setIncomingSupportCall(null)}>Dismiss</button>
-            <button type="button" className="btn btn-primary" onClick={() => {
-              setIncomingSupportCall(null);
-              router.push('/admin/support-calls');
-            }}>Open support queue</button>
+            <button type="button" className="btn" onClick={() => void handleStudentCallAction(incomingStudentCall, 'reject')}>Decline</button>
+            <button type="button" className="btn btn-primary" onClick={() => void handleStudentCallAction(incomingStudentCall, 'accept')}>Answer call</button>
           </div>
         </aside>
       )}
-      {supportCallAlertError && isSuperAdmin && !pathname?.startsWith('/admin/support-calls') && (
+      {supportCallAlertError && (isSuperAdmin || user?.role === 'student') && !pathname?.startsWith('/admin/support-calls') && (
         <aside
           role="status"
           style={{

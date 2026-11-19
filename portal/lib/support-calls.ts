@@ -2,6 +2,7 @@ import { apiClient } from './api';
 
 export type SupportCallMode = 'audio' | 'video';
 export type SupportCallStatus = 'pending' | 'accepted' | 'rejected' | 'ended' | 'expired';
+export type SupportCallDirection = 'student_to_admin' | 'admin_to_student';
 
 export interface SupportCallAccess {
   call_id: string;
@@ -20,7 +21,30 @@ export interface SupportCallState {
   email?: string;
   question?: string;
   mode_label?: string;
+  direction?: SupportCallDirection;
+  direction_label?: string;
+  recipient_id?: number | null;
   created_at?: string;
+}
+
+export interface SupportCallStudent {
+  id: number;
+  first_name: string;
+  last_name: string;
+  username: string;
+  email: string;
+}
+
+export interface SupportCallStudentAccess {
+  call_id: string;
+  display_name: string;
+  question: string;
+  mode: SupportCallMode;
+  mode_label: string;
+  status: SupportCallStatus;
+  accepted_at: string | null;
+  created_at: string;
+  expires_at: string;
 }
 
 export interface SupportCallCredentials {
@@ -58,6 +82,30 @@ export function getSupportCallToken(callId: string, capability: string) {
 
 export function getAdminSupportCalls() {
   return apiClient.get<SupportCallState[]>('/support-calls/admin/');
+}
+
+export function getAdminSupportCallStudents() {
+  return apiClient.get<SupportCallStudent[]>('/support-calls/admin/students/');
+}
+
+export function createAdminStudentSupportCall(studentId: number, mode: SupportCallMode) {
+  return apiClient.post<SupportCallState>('/support-calls/admin/outbound/', { student_id: studentId, mode });
+}
+
+export function getStudentSupportCalls() {
+  return apiClient.get<SupportCallStudentAccess[]>('/support-calls/student/');
+}
+
+export function getStudentSupportCall(callId: string) {
+  return apiClient.get<SupportCallStudentAccess>(`/support-calls/student/${callId}/`);
+}
+
+export function takeStudentSupportCallAction(callId: string, action: 'accept' | 'reject') {
+  return apiClient.post<SupportCallStudentAccess>(`/support-calls/student/${callId}/${action}/`);
+}
+
+export function getStudentSupportCallToken(callId: string) {
+  return apiClient.post<SupportCallCredentials>(`/support-calls/student/${callId}/token/`);
 }
 
 export function getAdminSupportCall(callId: string) {

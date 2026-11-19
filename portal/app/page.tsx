@@ -170,11 +170,10 @@ export default function HomePage() {
       </section>
 
       {(!user || user.role === 'student') && (
-        <section className={`container ${homeStyles.homeSupportRow}`} aria-labelledby="home-support-title">
+        <section className={`container ${homeStyles.homeSupportRow}`} aria-label="ESS support desk">
           <div className={homeStyles.homeSupportCard}>
             <div className={homeStyles.homeSupportCopy}>
               <span className={homeStyles.homeSupportKicker}>ESS support desk</span>
-              <h2 id="home-support-title">A real person is ready to help</h2>
               <p>
                 If you have any questions or need assistance, please feel free to contact or meet with our support agent or administrator.
               </p>

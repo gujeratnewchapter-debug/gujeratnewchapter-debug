@@ -9,6 +9,8 @@ from .models import SupportCallRequest
 class SupportCallRequestAdmin(admin.ModelAdmin):
     list_display = (
         'display_name',
+        'direction',
+        'recipient',
         'mode',
         'status',
         'created_at',
@@ -20,6 +22,22 @@ class SupportCallRequestAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
     readonly_fields = (
         'requester',
+        'recipient',
+        'direction',
+        'mode',
+        'status',
+        'room_name',
+        'handled_by',
+        'created_at',
+        'accepted_at',
+        'ended_at',
+        'expires_at',
+        'updated_at',
+    )
+    fields = (
+        'requester',
+        'recipient',
+        'direction',
         'display_name',
         'email',
         'question',
@@ -33,7 +51,6 @@ class SupportCallRequestAdmin(admin.ModelAdmin):
         'expires_at',
         'updated_at',
     )
-    fields = readonly_fields
 
     @admin.display(description='Live response')
     def open_support_queue(self, _call):
@@ -41,7 +58,4 @@ class SupportCallRequestAdmin(admin.ModelAdmin):
         return format_html('<a href="{}" target="_blank" rel="noopener">Open support queue</a>', url)
 
     def has_add_permission(self, request):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
         return False

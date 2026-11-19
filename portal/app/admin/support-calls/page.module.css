@@ -117,6 +117,43 @@
   margin-top: 32px;
 }
 
+.directCallForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, .4fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #dce7e1;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.directCallForm label {
+  display: grid;
+  gap: 6px;
+  color: #526a60;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.directCallForm select {
+  width: 100%;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid #d7e5df;
+  border-radius: 7px;
+  background: #fff;
+  color: #23465d;
+  font: inherit;
+  font-size: 12px;
+}
+
+.callAvailability {
+  margin: 8px 2px 0;
+  color: #71808b;
+  font-size: 11px;
+}
+
 .sectionHeading {
   display: flex;
   align-items: center;
@@ -433,6 +470,10 @@
   .activeCall .actions {
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .directCallForm {
+    grid-template-columns: 1fr;
   }
 
   .footer {

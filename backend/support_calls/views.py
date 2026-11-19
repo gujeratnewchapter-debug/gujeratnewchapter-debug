@@ -5,6 +5,7 @@ from hmac import compare_digest
 from urllib.parse import urlparse
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -15,7 +16,13 @@ from rest_framework.views import APIView
 from .livekit import create_support_call_token
 from .models import SupportCallRequest
 from .permissions import IsSuperAdmin
-from .serializers import SupportCallAdminSerializer, SupportCallCapabilitySerializer, SupportCallCreateSerializer
+from .serializers import (
+    SupportCallAdminSerializer,
+    SupportCallAdminOutboundSerializer,
+    SupportCallCapabilitySerializer,
+    SupportCallCreateSerializer,
+    SupportCallStudentSerializer,
+)
 from .throttles import (
     SupportCallAdminTokenThrottle,
     SupportCallCreateThrottle,
@@ -25,6 +32,7 @@ from .throttles import (
 
 
 REQUEST_TTL = timedelta(minutes=10)
+User = get_user_model()
 
 
 def _capability_digest(capability):
@@ -168,6 +176,168 @@ class SupportCallAdminQueueView(APIView):
         return _no_store_response(SupportCallAdminSerializer(calls, many=True).data)
 
 
+class SupportCallAdminStudentsView(APIView):
+    permission_classes = [IsSuperAdmin]
+
+    def get(self, request):
+        students = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+        ).order_by('first_name', 'last_name', 'username').values(
+            'id',
+            'first_name',
+            'last_name',
+            'username',
+            'email',
+        )[:500]
+        return _no_store_response(list(students))
+
+
+class SupportCallAdminOutboundView(APIView):
+    permission_classes = [IsSuperAdmin]
+
+    def post(self, request):
+        serializer = SupportCallAdminOutboundSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        student_id = serializer.validated_data['student_id']
+        mode = serializer.validated_data['mode']
+        if not _livekit_is_configured():
+            return Response({'detail': 'Live support calling is not configured on the server.'}, status=503)
+        student = User.objects.filter(
+            pk=student_id,
+            role=User.Role.STUDENT,
+            is_active=True,
+        ).first()
+        if student is None:
+            return Response({'detail': 'The selected student account is not available.'}, status=404)
+        if not student.email:
+            return Response({'detail': 'The selected student account has no email address.'}, status=400)
+
+        call_id = secrets.token_hex(16)
+        call = SupportCallRequest.objects.create(
+            requester=student,
+            recipient=student,
+            direction=SupportCallRequest.Direction.ADMIN_TO_STUDENT,
+            display_name=student.get_full_name() or student.username,
+            email=student.email,
+            question='Direct call from an ESS administrator.',
+            mode=mode,
+            status=SupportCallRequest.Status.PENDING,
+            capability_hash=_capability_digest(secrets.token_urlsafe(32)),
+            room_name=f'support-{call_id}',
+            handled_by=request.user,
+            expires_at=timezone.now() + REQUEST_TTL,
+        )
+        return _no_store_response(
+            SupportCallAdminSerializer(call).data,
+            response_status=status.HTTP_201_CREATED,
+        )
+
+
+class SupportCallStudentQueueView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if getattr(request.user, 'role', None) != User.Role.STUDENT:
+            return Response({'detail': 'Only students can receive direct support calls.'}, status=403)
+        now = timezone.now()
+        SupportCallRequest.objects.filter(
+            recipient=request.user,
+            direction=SupportCallRequest.Direction.ADMIN_TO_STUDENT,
+            status=SupportCallRequest.Status.PENDING,
+            expires_at__lte=now,
+        ).update(status=SupportCallRequest.Status.EXPIRED, updated_at=now)
+        calls = SupportCallRequest.objects.filter(
+            recipient=request.user,
+            direction=SupportCallRequest.Direction.ADMIN_TO_STUDENT,
+            status=SupportCallRequest.Status.PENDING,
+            expires_at__gt=now,
+        ).select_related('handled_by')
+        return _no_store_response(SupportCallStudentSerializer(calls, many=True).data)
+
+
+class SupportCallStudentActionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, call_id, action):
+        if getattr(request.user, 'role', None) != User.Role.STUDENT:
+            return Response({'detail': 'Only the requested student can answer this call.'}, status=403)
+        if action not in ('accept', 'reject'):
+            return Response({'detail': 'Unknown call action.'}, status=404)
+        if action == 'accept' and not _livekit_is_configured():
+            return Response({'detail': 'Live support calling is not configured on the server.'}, status=503)
+
+        with transaction.atomic():
+            call = SupportCallRequest.objects.select_for_update().filter(
+                pk=call_id,
+                recipient=request.user,
+                direction=SupportCallRequest.Direction.ADMIN_TO_STUDENT,
+            ).first()
+            if call is None:
+                return Response({'detail': 'Direct support call not found.'}, status=404)
+            call.expire_if_needed()
+            if call.status != SupportCallRequest.Status.PENDING:
+                return Response({'detail': f'This call is already {call.status}.'}, status=409)
+            now = timezone.now()
+            call.status = (
+                SupportCallRequest.Status.ACCEPTED
+                if action == 'accept'
+                else SupportCallRequest.Status.REJECTED
+            )
+            call.accepted_at = now if action == 'accept' else None
+            call.ended_at = now if action == 'reject' else None
+            call.save(update_fields=('status', 'accepted_at', 'ended_at', 'updated_at'))
+
+        response_data = SupportCallStudentSerializer(call).data
+        if action == 'accept':
+            credentials = _make_token(call, f'support-student-{request.user.pk}')
+            if credentials is None:
+                return Response({'detail': 'Live support calling is not configured yet. Please try again later.'}, status=503)
+            response_data['credentials'] = credentials
+        return _no_store_response(response_data)
+
+
+class SupportCallStudentDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, call_id):
+        if getattr(request.user, 'role', None) != User.Role.STUDENT:
+            return Response({'detail': 'Only the requested student can access this call.'}, status=403)
+        call = SupportCallRequest.objects.filter(
+            pk=call_id,
+            recipient=request.user,
+            direction=SupportCallRequest.Direction.ADMIN_TO_STUDENT,
+        ).select_related('handled_by').first()
+        if call is None:
+            return Response({'detail': 'Direct support call not found.'}, status=404)
+        call.expire_if_needed()
+        return _no_store_response(SupportCallStudentSerializer(call).data)
+
+
+class SupportCallStudentTokenView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [SupportCallTokenThrottle]
+    throttle_scope = 'support_call_token'
+
+    def post(self, request, call_id):
+        if getattr(request.user, 'role', None) != User.Role.STUDENT:
+            return Response({'detail': 'Only the requested student can join this call.'}, status=403)
+        call = SupportCallRequest.objects.filter(
+            pk=call_id,
+            recipient=request.user,
+            direction=SupportCallRequest.Direction.ADMIN_TO_STUDENT,
+        ).first()
+        if call is None:
+            return Response({'detail': 'Direct support call not found.'}, status=404)
+        call.expire_if_needed()
+        if call.status != SupportCallRequest.Status.ACCEPTED:
+            return Response({'detail': f'This call is {call.status}; a connection token is not available.'}, status=409)
+        credentials = _make_token(call, f'support-student-{request.user.pk}')
+        if credentials is None:
+            return Response({'detail': 'Live support calling is not configured yet. Please try again later.'}, status=503)
+        return _no_store_response(credentials)
+
+
 class SupportCallAdminDetailView(APIView):
     permission_classes = [IsSuperAdmin]
 
@@ -240,7 +410,11 @@ class SupportCallAdminSessionTicketView(APIView):
         call = SupportCallRequest.objects.filter(pk=call_id).first()
         if call is None:
             return Response({'detail': 'Support call not found.'}, status=404)
-        if call.status != SupportCallRequest.Status.ACCEPTED:
+        can_wait_for_student = (
+            call.direction == SupportCallRequest.Direction.ADMIN_TO_STUDENT
+            and call.status == SupportCallRequest.Status.PENDING
+        )
+        if call.status != SupportCallRequest.Status.ACCEPTED and not can_wait_for_student:
             return Response({'detail': 'Accept this call before joining it.'}, status=409)
 
         capability = secrets.token_urlsafe(32)

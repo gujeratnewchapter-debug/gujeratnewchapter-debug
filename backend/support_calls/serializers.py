@@ -29,9 +29,16 @@ class SupportCallCapabilitySerializer(serializers.Serializer):
     capability = serializers.CharField(min_length=32, max_length=128, trim_whitespace=False)
 
 
+class SupportCallAdminOutboundSerializer(serializers.Serializer):
+    student_id = serializers.IntegerField(min_value=1)
+    mode = serializers.ChoiceField(choices=SupportCallRequest.Mode.choices)
+
+
 class SupportCallAdminSerializer(serializers.ModelSerializer):
     call_id = serializers.UUIDField(source='id', read_only=True)
     mode_label = serializers.CharField(source='get_mode_display', read_only=True)
+    recipient_id = serializers.IntegerField(read_only=True, allow_null=True)
+    direction_label = serializers.CharField(source='get_direction_display', read_only=True)
 
     class Meta:
         model = SupportCallRequest
@@ -42,8 +49,37 @@ class SupportCallAdminSerializer(serializers.ModelSerializer):
             'question',
             'mode',
             'mode_label',
+            'direction',
+            'direction_label',
+            'recipient_id',
             'status',
             'created_at',
             'accepted_at',
             'expires_at',
         )
+
+
+class SupportCallStudentSerializer(serializers.ModelSerializer):
+    call_id = serializers.UUIDField(source='id', read_only=True)
+    mode_label = serializers.CharField(source='get_mode_display', read_only=True)
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SupportCallRequest
+        fields = (
+            'call_id',
+            'display_name',
+            'question',
+            'mode',
+            'mode_label',
+            'accepted_at',
+            'status',
+            'created_at',
+            'expires_at',
+        )
+
+    def get_display_name(self, call):
+        admin = call.handled_by
+        if admin is None:
+            return 'ESS administrator'
+        return (admin.get_full_name() or admin.username).strip()

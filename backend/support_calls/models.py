@@ -6,6 +6,10 @@ from django.utils import timezone
 
 
 class SupportCallRequest(models.Model):
+    class Direction(models.TextChoices):
+        STUDENT_TO_ADMIN = 'student_to_admin', 'Student to administrator'
+        ADMIN_TO_STUDENT = 'admin_to_student', 'Administrator to student'
+
     class Mode(models.TextChoices):
         AUDIO = 'audio', 'Voice call'
         VIDEO = 'video', 'Video call'
@@ -24,6 +28,18 @@ class SupportCallRequest(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name='support_call_requests',
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='received_support_calls',
+    )
+    direction = models.CharField(
+        max_length=20,
+        choices=Direction.choices,
+        default=Direction.STUDENT_TO_ADMIN,
     )
     display_name = models.CharField(max_length=100)
     email = models.EmailField(max_length=254)

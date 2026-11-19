@@ -6,8 +6,12 @@ import { useRouter } from 'next/navigation';
 import { Bell, BellOff, Headphones, LoaderCircle, Phone, RefreshCw, Video } from 'lucide-react';
 import { isSuperAdminUser, useAuth } from '@/lib/auth-context';
 import {
+  createAdminStudentSupportCall,
+  createAdminSupportCallSession,
   getAdminSupportCalls,
+  getAdminSupportCallStudents,
   getSupportCallError,
+  SupportCallStudent,
   SupportCallState,
   takeSupportCallAction,
 } from '@/lib/support-calls';
@@ -44,11 +48,22 @@ export default function AdminSupportCallsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundReady, setSoundReady] = useState(false);
   const [soundError, setSoundError] = useState('');
   const audioContextRef = useRef<AudioContext | null>(null);
   const alertedCallIds = useRef(new Set<string>());
+  const handleActionRef = useRef<(call: SupportCallState, action: 'accept' | 'reject' | 'end') => Promise<void>>(
+    async () => undefined,
+  );
+  const [students, setStudents] = useState<SupportCallStudent[]>([]);
+  const [studentId, setStudentId] = useState('');
+  const [directMode, setDirectMode] = useState<'audio' | 'video'>('video');
+  const [directCallError, setDirectCallError] = useState('');
+  const [directCallBusy, setDirectCallBusy] = useState(false);
   const pending = calls.filter((call) => call.status === 'pending');
-  const pendingCount = pending.length;
+  const incoming = pending.filter((call) => call.direction !== 'admin_to_student');
+  const outgoing = pending.filter((call) => call.direction === 'admin_to_student');
+  const pendingCount = incoming.length;
   const active = calls.filter((call) => call.status === 'accepted');
 
   const refresh = useCallback(async () => {
@@ -71,7 +86,31 @@ export default function AdminSupportCallsPage() {
   }, [isAdmin, isLoading, refresh]);
 
   useEffect(() => {
-    pending.forEach((call) => {
+    if (isLoading || !isAdmin) return;
+    getAdminSupportCallStudents()
+      .then(({ data }) => setStudents(data))
+      .catch((requestError) => setDirectCallError(
+        getSupportCallError(requestError, 'Could not load student accounts for direct calling.'),
+      ));
+  }, [isAdmin, isLoading]);
+
+  useEffect(() => {
+    if (window.localStorage.getItem('essSupportCallAlerts') !== 'enabled') return;
+    setSoundEnabled(true);
+    try {
+      const context = new AudioContext();
+      audioContextRef.current = context;
+      void context.resume().then(() => setSoundReady(context.state === 'running')).catch(() => {
+        setSoundReady(false);
+        setSoundError('Alerts remain enabled. Click the sound control once if your browser blocks sound after reload.');
+      });
+    } catch {
+      setSoundError('Desktop notifications remain enabled, but this browser cannot play call sounds.');
+    }
+  }, []);
+
+  useEffect(() => {
+    incoming.forEach((call) => {
       if (alertedCallIds.current.has(call.call_id)) return;
       if (!soundEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
 
@@ -83,30 +122,54 @@ export default function AdminSupportCallsPage() {
       });
       notification.onclick = () => {
         window.focus();
-        document.getElementById(`support-call-${call.call_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         notification.close();
+        void handleActionRef.current(call, 'accept');
       };
     });
-  }, [pending, soundEnabled]);
+  }, [incoming, soundEnabled]);
 
   useEffect(() => {
     const context = audioContextRef.current;
-    if (!soundEnabled || pendingCount === 0 || !context || context.state !== 'running') return;
+    if (!soundEnabled || !soundReady || pendingCount === 0 || !context || context.state !== 'running') return;
 
     playIncomingRingtone(context);
     const timer = window.setInterval(() => playIncomingRingtone(context), 2800);
     return () => window.clearInterval(timer);
-  }, [soundEnabled, pendingCount]);
+  }, [soundEnabled, soundReady, pendingCount]);
 
   useEffect(() => () => {
     void audioContextRef.current?.close();
     audioContextRef.current = null;
   }, []);
 
+  async function disableCallAlerts() {
+    setSoundEnabled(false);
+    setSoundReady(false);
+    window.localStorage.setItem('essSupportCallAlerts', 'disabled');
+    await audioContextRef.current?.close();
+    audioContextRef.current = null;
+  }
+
   async function toggleCallSound() {
     setSoundError('');
     if (soundEnabled) {
+      let context = audioContextRef.current;
+      if (!context || context.state !== 'running') {
+        try {
+          context = context ?? new AudioContext();
+          audioContextRef.current = context;
+          await context.resume();
+          setSoundReady(context.state === 'running');
+          setSoundError('');
+          return;
+        } catch {
+          setSoundError('Call sound could not start. Check your browser audio settings and try again.');
+          return;
+        }
+      }
       setSoundEnabled(false);
+      setSoundReady(false);
+      await disableCallAlerts();
       return;
     }
 
@@ -118,8 +181,10 @@ export default function AdminSupportCallsPage() {
         ? Notification.requestPermission().catch(() => 'denied' as NotificationPermission)
         : Promise.resolve('Notification' in window ? Notification.permission : 'denied');
       await resumeAudio;
+      setSoundReady(context.state === 'running');
       const permission = await notificationPermission;
       setSoundEnabled(true);
+      window.localStorage.setItem('essSupportCallAlerts', 'enabled');
       if (permission === 'denied') {
         setSoundError('Sound is on, but browser notifications are blocked. Allow notifications for this site in your browser settings.');
       }
@@ -128,20 +193,42 @@ export default function AdminSupportCallsPage() {
     }
   }
 
-  async function handleAction(call: SupportCallState, action: 'accept' | 'reject' | 'end') {
+  const handleAction = useCallback(async (call: SupportCallState, action: 'accept' | 'reject' | 'end') => {
     setBusy(`${call.call_id}:${action}`);
     setError('');
     try {
       await takeSupportCallAction(call.call_id, action);
-      await refresh();
       if (action === 'accept') {
-        router.push(`/support-call/${call.call_id}?admin=1`);
+        const { data: session } = await createAdminSupportCallSession(call.call_id);
+        const target = new URL(`/support-call/${call.call_id}?autojoin=1`, window.location.origin);
+        target.hash = new URLSearchParams({ admin_ticket: session.capability }).toString();
+        window.location.assign(target.toString());
+        return;
       }
+      await refresh();
     } catch (requestError) {
       setError(getSupportCallError(requestError, 'That action could not be completed. Refresh the queue and try again.'));
       await refresh();
     } finally {
       setBusy(null);
+    }
+  }, [refresh]);
+  handleActionRef.current = handleAction;
+
+  async function startStudentCall() {
+    if (!studentId || directCallBusy) return;
+    setDirectCallBusy(true);
+    setDirectCallError('');
+    try {
+      const { data: call } = await createAdminStudentSupportCall(Number(studentId), directMode);
+      const { data: session } = await createAdminSupportCallSession(call.call_id);
+      const target = new URL(`/support-call/${call.call_id}?autojoin=1`, window.location.origin);
+      target.hash = new URLSearchParams({ admin_ticket: session.capability }).toString();
+      window.location.assign(target.toString());
+    } catch (requestError) {
+      setDirectCallError(getSupportCallError(requestError, 'Could not start the direct call. Please try again.'));
+    } finally {
+      setDirectCallBusy(false);
     }
   }
 
@@ -170,8 +257,15 @@ export default function AdminSupportCallsPage() {
         <div className={styles.headerActions}>
           <button type="button" className={soundEnabled ? styles.soundEnabled : styles.refresh} onClick={() => void toggleCallSound()} aria-pressed={soundEnabled}>
             {soundEnabled ? <Bell size={15} /> : <BellOff size={15} />}
-            {soundEnabled ? 'Alerts & sound on' : 'Enable alerts & sound'}
+            {soundEnabled
+              ? soundReady ? 'Disable alerts & sound' : 'Enable sound'
+              : 'Enable alerts & sound'}
           </button>
+          {soundEnabled && !soundReady && (
+            <button type="button" className={styles.refresh} onClick={() => void disableCallAlerts()}>
+              Disable alerts
+            </button>
+          )}
           <button type="button" className={styles.refresh} onClick={() => void refresh()} disabled={loading}>
             <RefreshCw size={15} className={loading ? styles.spinner : ''} /> Refresh
           </button>
@@ -189,18 +283,51 @@ export default function AdminSupportCallsPage() {
 
       {error && <div className={styles.error} role="alert">{error}</div>}
       {soundError && <div className={styles.error} role="alert">{soundError}</div>}
+      {directCallError && <div className={styles.error} role="alert">{directCallError}</div>}
+
+      <section aria-labelledby="direct-call-title" className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <div><h2 id="direct-call-title">Call a student directly</h2><span>Voice or video</span></div>
+        </div>
+        <form className={styles.directCallForm} onSubmit={(event) => { event.preventDefault(); void startStudentCall(); }}>
+          <label>
+            <span>Student</span>
+            <select value={studentId} onChange={(event) => setStudentId(event.target.value)} required>
+              <option value="">Choose a student</option>
+              {students.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {(student.first_name || student.last_name)
+                    ? `${student.first_name} ${student.last_name}`.trim()
+                    : student.username} · {student.email}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Call type</span>
+            <select value={directMode} onChange={(event) => setDirectMode(event.target.value as 'audio' | 'video')}>
+              <option value="audio">Voice call</option>
+              <option value="video">Video call</option>
+            </select>
+          </label>
+          <button type="submit" className={styles.accept} disabled={!studentId || directCallBusy}>
+            {directCallBusy ? 'Calling…' : <><Phone size={15} /> Call student</>}
+          </button>
+        </form>
+        <p className={styles.callAvailability}>The student must be signed in to the portal to receive the call alert.</p>
+      </section>
 
       <section aria-labelledby="waiting-title" className={styles.section}>
         <div className={styles.sectionHeading}>
-          <div><h2 id="waiting-title">Waiting for help</h2><span>{pending.length} {pending.length === 1 ? 'request' : 'requests'}</span></div>
+          <div><h2 id="waiting-title">Incoming support calls</h2><span>{incoming.length} {incoming.length === 1 ? 'request' : 'requests'}</span></div>
         </div>
         {loading && calls.length === 0 ? (
           <div className={styles.empty}><LoaderCircle className={styles.spinner} /> Loading queue…</div>
-        ) : pending.length === 0 ? (
+        ) : incoming.length === 0 ? (
           <div className={styles.empty}><span className={styles.emptyMark}><Headphones size={21} /></span><strong>No one is waiting</strong><small>New requests will appear here automatically.</small></div>
         ) : (
           <div className={styles.queueList}>
-            {pending.map((call) => (
+            {incoming.map((call) => (
               <article className={styles.callCard} id={`support-call-${call.call_id}`} key={call.call_id}>
                 <div className={styles.callIdentity}>
                   <span className={styles.avatar}>{call.display_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
@@ -228,6 +355,30 @@ export default function AdminSupportCallsPage() {
         )}
       </section>
 
+      {outgoing.length > 0 && (
+        <section aria-labelledby="outgoing-title" className={styles.section}>
+          <div className={styles.sectionHeading}>
+            <div><h2 id="outgoing-title">Calling students</h2><span>{outgoing.length} waiting for an answer</span></div>
+          </div>
+          <div className={styles.queueList}>
+            {outgoing.map((call) => (
+              <article className={styles.callCard} key={call.call_id}>
+                <div className={styles.caller}>
+                  <strong>{call.display_name}</strong>
+                  <a href={`mailto:${call.email}`}>{call.email}</a>
+                </div>
+                <div className={styles.callMeta}>
+                  <span className={styles.mode}>{call.mode === 'video' ? <Video size={15} /> : <Phone size={15} />}{call.mode_label}</span>
+                  <span>Waiting for student to answer</span>
+                </div>
+                <div className={styles.actions}>
+                  <button type="button" className={styles.reject} onClick={() => void handleAction(call, 'reject')} disabled={busy !== null}>Cancel call</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <section aria-labelledby="active-title" className={styles.section}>
         <div className={styles.sectionHeading}>
           <div><h2 id="active-title">Accepted calls</h2><span>{active.length} active</span></div>

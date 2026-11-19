@@ -3,6 +3,7 @@ import jwt
 from datetime import timedelta
 import uuid
 
+from django.contrib import admin as django_admin
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
@@ -40,6 +41,16 @@ class SupportCallAdminSiteTests(TestCase):
         self.assertContains(response, call.display_name)
         self.assertContains(response, 'Open support queue')
         self.assertContains(response, '/static/support_calls/admin_support_calls.js')
+        support_admin = django_admin.site._registry[SupportCallRequest]
+        self.assertNotIn('display_name', support_admin.readonly_fields)
+        self.assertNotIn('email', support_admin.readonly_fields)
+        self.assertTrue(support_admin.has_delete_permission(response.wsgi_request, call))
+        delete_response = self.client.post(
+            reverse('admin:support_calls_supportcallrequest_delete', args=(call.id,)),
+            {'post': 'yes'},
+        )
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertFalse(SupportCallRequest.objects.filter(pk=call.id).exists())
 
     @override_settings(
         LIVEKIT_URL='wss://live.example.com',
@@ -326,6 +337,109 @@ class SupportCallApiTests(APITestCase):
         self.assertFalse(token_claims['video']['canPublishData'])
         self.assertNotIn('canUpdateOwnMetadata', token_claims['video'])
         self.assertLessEqual(token_claims['exp'] - token_claims['iat'], 30 * 60)
+
+    @override_settings(
+        LIVEKIT_URL='wss://live.example.com',
+        LIVEKIT_API_KEY='test-livekit-key',
+        LIVEKIT_API_SECRET='test-livekit-secret',
+    )
+    def test_admin_can_call_a_student_and_only_that_student_can_answer(self):
+        self.client.force_authenticate(self.admin)
+        create_response = self.client.post(
+            reverse('support-call-admin-outbound'),
+            {'student_id': self.student.pk, 'mode': 'video'},
+            format='json',
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        call = SupportCallRequest.objects.get(pk=create_response.data['call_id'])
+        self.assertEqual(call.direction, SupportCallRequest.Direction.ADMIN_TO_STUDENT)
+        self.assertEqual(call.recipient, self.student)
+        self.assertEqual(create_response.data['status'], SupportCallRequest.Status.PENDING)
+
+        admin_ticket = self.client.post(
+            reverse('support-call-admin-session-ticket', args=(call.id,)),
+            data='{}',
+            content_type='application/json',
+        )
+        self.assertEqual(admin_ticket.status_code, 200)
+
+        self.client.force_authenticate(self.student)
+        student_queue = self.client.get(reverse('support-call-student-queue'))
+        self.assertEqual(student_queue.status_code, 200)
+        self.assertEqual(student_queue.data[0]['call_id'], str(call.id))
+        self.assertEqual(student_queue.data[0]['display_name'], 'support-admin')
+
+        accepted = self.client.post(reverse('support-call-student-action', args=(call.id, 'accept')))
+        student_token = self.client.post(reverse('support-call-student-token', args=(call.id,)))
+        admin_token = self.client.post(
+            reverse('support-call-admin-session-token', args=(call.id,)),
+            {'capability': admin_ticket.data['capability']},
+            format='json',
+        )
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.data['status'], SupportCallRequest.Status.ACCEPTED)
+        self.assertEqual(student_token.status_code, 200)
+        self.assertEqual(admin_token.status_code, 200)
+        claims = jwt.decode(
+            student_token.data['token'],
+            'test-livekit-secret',
+            algorithms=['HS256'],
+            options={'verify_iat': False, 'verify_exp': False},
+        )
+        self.assertEqual(claims['sub'], f'support-student-{self.student.pk}')
+        self.assertEqual(claims['video']['room'], call.room_name)
+        admin_claims = jwt.decode(
+            admin_token.data['token'],
+            'test-livekit-secret',
+            algorithms=['HS256'],
+            options={'verify_iat': False, 'verify_exp': False},
+        )
+        self.assertIn('camera', admin_claims['video']['canPublishSources'])
+
+        other_student = User.objects.create_user(
+            username='other-support-student',
+            email='other-student@example.com',
+            password='Password123!',
+            role=User.Role.STUDENT,
+        )
+        self.client.force_authenticate(other_student)
+        forbidden = self.client.post(reverse('support-call-student-action', args=(call.id, 'accept')))
+        self.assertEqual(forbidden.status_code, 404)
+
+    def test_admin_outbound_call_validates_student_and_mode(self):
+        self.client.force_authenticate(self.admin)
+
+        invalid_student = self.client.post(
+            reverse('support-call-admin-outbound'),
+            {'student_id': 'not-an-id', 'mode': 'video'},
+            format='json',
+        )
+        invalid_mode = self.client.post(
+            reverse('support-call-admin-outbound'),
+            {'student_id': self.student.pk, 'mode': 'screen-share'},
+            format='json',
+        )
+
+        self.assertEqual(invalid_student.status_code, 400)
+        self.assertEqual(invalid_mode.status_code, 400)
+        self.assertEqual(SupportCallRequest.objects.count(), 0)
+
+    def test_only_the_target_student_can_view_or_answer_an_admin_call(self):
+        call = self.create_model_request()
+        call.direction = SupportCallRequest.Direction.ADMIN_TO_STUDENT
+        call.recipient = self.student
+        call.handled_by = self.admin
+        call.save(update_fields=('direction', 'recipient', 'handled_by'))
+        self.client.force_authenticate(self.admin)
+
+        admin_cannot_answer_as_student = self.client.post(
+            reverse('support-call-student-action', args=(call.id, 'accept')),
+        )
+
+        self.assertEqual(admin_cannot_answer_as_student.status_code, 403)
+        call.refresh_from_db()
+        self.assertEqual(call.status, SupportCallRequest.Status.PENDING)
 
     @override_settings(
         LIVEKIT_URL='wss://live.example.com',

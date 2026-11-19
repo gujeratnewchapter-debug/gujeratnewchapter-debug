@@ -4,6 +4,8 @@ from .views import (
     SupportCallAdminActionView,
     SupportCallAdminDetailView,
     SupportCallAdminQueueView,
+    SupportCallAdminOutboundView,
+    SupportCallAdminStudentsView,
     SupportCallAdminSessionEndView,
     SupportCallAdminSessionTicketView,
     SupportCallAdminSessionTokenView,
@@ -11,6 +13,10 @@ from .views import (
     SupportCallAdminTokenView,
     SupportCallRequestView,
     SupportCallStatusView,
+    SupportCallStudentActionView,
+    SupportCallStudentDetailView,
+    SupportCallStudentQueueView,
+    SupportCallStudentTokenView,
     SupportCallTokenView,
 )
 
@@ -19,6 +25,8 @@ urlpatterns = [
     path('status/', SupportCallStatusView.as_view(), name='support-call-status'),
     path('token/', SupportCallTokenView.as_view(), name='support-call-token'),
     path('admin/', SupportCallAdminQueueView.as_view(), name='support-call-admin-queue'),
+    path('admin/students/', SupportCallAdminStudentsView.as_view(), name='support-call-admin-students'),
+    path('admin/outbound/', SupportCallAdminOutboundView.as_view(), name='support-call-admin-outbound'),
     path('admin/<uuid:call_id>/', SupportCallAdminDetailView.as_view(), name='support-call-admin-detail'),
     path('admin/<uuid:call_id>/session-ticket/', SupportCallAdminSessionTicketView.as_view(), name='support-call-admin-session-ticket'),
     path('admin/<uuid:call_id>/token/', SupportCallAdminTokenView.as_view(), name='support-call-admin-token'),
@@ -26,4 +34,8 @@ urlpatterns = [
     path('admin-session/<uuid:call_id>/status/', SupportCallAdminSessionView.as_view(), name='support-call-admin-session-status'),
     path('admin-session/<uuid:call_id>/token/', SupportCallAdminSessionTokenView.as_view(), name='support-call-admin-session-token'),
     path('admin-session/<uuid:call_id>/end/', SupportCallAdminSessionEndView.as_view(), name='support-call-admin-session-end'),
+    path('student/', SupportCallStudentQueueView.as_view(), name='support-call-student-queue'),
+    path('student/<uuid:call_id>/', SupportCallStudentDetailView.as_view(), name='support-call-student-detail'),
+    path('student/<uuid:call_id>/token/', SupportCallStudentTokenView.as_view(), name='support-call-student-token'),
+    path('student/<uuid:call_id>/<str:action>/', SupportCallStudentActionView.as_view(), name='support-call-student-action'),
 ]
