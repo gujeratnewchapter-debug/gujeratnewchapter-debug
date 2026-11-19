@@ -6,6 +6,7 @@ import { Footer } from '@/components/Footer';
 import CursorImageTrail from '@/components/CursorImageTrail';
 import { PlatformStatsPopup } from '@/components/PlatformStatsPopup';
 import { AdvertisementPopup } from '@/components/AdvertisementPopup';
+import { LiveChatWidget } from '@/components/LiveChatWidget';
 
 export const metadata: Metadata = {
   title: 'Ethiopian Startup School',
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main style={{ minHeight: '70vh' }}>{children}</main>
             <div className="woven-band" />
             <Footer />
+            <LiveChatWidget />
           </div>
         </Providers>
       </body>

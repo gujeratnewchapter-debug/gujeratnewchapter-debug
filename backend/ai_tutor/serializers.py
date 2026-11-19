@@ -52,6 +52,37 @@ class BusinessAdvisorQuestionSerializer(serializers.Serializer):
     question = serializers.CharField(max_length=4000, trim_whitespace=True)
 
 
+class SupportChatHistoryMessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=('user', 'assistant'))
+    content = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+
+class SupportChatSerializer(serializers.Serializer):
+    message = serializers.CharField(max_length=2000, trim_whitespace=True)
+    history = SupportChatHistoryMessageSerializer(many=True, required=False, max_length=12)
+
+    def validate(self, attrs):
+        history = attrs.get('history', [])
+        if len(history) % 2:
+            raise serializers.ValidationError(
+                {'history': 'Conversation history must contain complete user and assistant turns.'}
+            )
+
+        for index, entry in enumerate(history):
+            expected_role = 'user' if index % 2 == 0 else 'assistant'
+            if entry['role'] != expected_role:
+                raise serializers.ValidationError(
+                    {'history': 'Conversation history contains an invalid message order.'}
+                )
+
+        total_characters = len(attrs['message']) + sum(len(entry['content']) for entry in history)
+        if total_characters > 8000:
+            raise serializers.ValidationError(
+                {'history': 'The current message and conversation history are too long.'}
+            )
+        return attrs
+
+
 class KnowledgeDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = KnowledgeDocument

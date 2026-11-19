@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import business_advisor, ConversationViewSet, KnowledgeDocumentViewSet
+from .views import business_advisor, support_chat, ConversationViewSet, KnowledgeDocumentViewSet
 
 router = DefaultRouter()
 router.include_root_view = False
@@ -9,5 +9,6 @@ router.register('knowledge-documents', KnowledgeDocumentViewSet, basename='knowl
 
 urlpatterns = [
     path('advisor/', business_advisor, name='business-advisor'),
+    path('support-chat/', support_chat, name='support-chat'),
     *router.urls,
 ]

@@ -8,6 +8,7 @@ from .models import Conversation, Message, KnowledgeDocument
 from .serializers import (
     ConversationSerializer, ConversationListSerializer, SendMessageSerializer,
     MessageSerializer, KnowledgeDocumentSerializer, BusinessAdvisorQuestionSerializer,
+    SupportChatSerializer,
 )
 from .services import AIServiceUnavailable, get_ai_reply
 
@@ -20,6 +21,17 @@ class AIServiceUnavailableResponse(APIException):
 
 class BusinessAdvisorThrottle(SimpleRateThrottle):
     scope = 'business_advisor'
+    rate = '10/min'
+
+    def get_rate(self):
+        return self.rate
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
+class PublicSupportChatThrottle(SimpleRateThrottle):
+    scope = 'public_support_chat'
     rate = '10/min'
 
     def get_rate(self):
@@ -47,6 +59,26 @@ def business_advisor(request):
         raise AIServiceUnavailableResponse(str(error)) from error
 
     return Response({'content': reply_text, 'sources': sources})
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([permissions.AllowAny])
+@throttle_classes([PublicSupportChatThrottle])
+def support_chat(request):
+    serializer = SupportChatSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        reply_text, _sources = get_ai_reply(
+            'support',
+            serializer.validated_data.get('history', []),
+            serializer.validated_data['message'],
+        )
+    except AIServiceUnavailable as error:
+        raise AIServiceUnavailableResponse(str(error)) from error
+
+    return Response({'content': reply_text})
 
 
 class ConversationViewSet(viewsets.ModelViewSet):
