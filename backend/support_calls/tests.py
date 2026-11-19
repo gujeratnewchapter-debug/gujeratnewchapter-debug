@@ -182,10 +182,10 @@ class SupportCallApiTests(APITestCase):
     def test_public_create_endpoint_is_rate_limited(self):
         cache.clear()
 
-        responses = [self.create_request() for _ in range(6)]
+        responses = [self.create_request() for _ in range(11)]
 
-        self.assertTrue(all(response.status_code == 201 for response in responses[:5]))
-        self.assertEqual(responses[5].status_code, 429)
+        self.assertTrue(all(response.status_code == 201 for response in responses[:10]))
+        self.assertEqual(responses[10].status_code, 429)
 
     def test_authenticated_student_email_comes_from_account(self):
         self.client.force_authenticate(self.student)

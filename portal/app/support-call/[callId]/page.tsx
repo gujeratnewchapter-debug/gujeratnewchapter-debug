@@ -107,6 +107,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
   const [error, setError] = useState('');
   const [micEnabled, setMicEnabled] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [audioPlaybackBlocked, setAudioPlaybackBlocked] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [, setMediaRevision] = useState(0);
   const [mediaNotice, setMediaNotice] = useState('');
@@ -254,12 +255,14 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
       });
       roomRef.current = room;
       const refreshTracks = () => setMediaRevision((value) => value + 1);
+      const refreshAudioPlayback = () => setAudioPlaybackBlocked(!room?.canPlaybackAudio);
       room.on(RoomEvent.TrackSubscribed, refreshTracks);
       room.on(RoomEvent.TrackUnsubscribed, refreshTracks);
       room.on(RoomEvent.LocalTrackPublished, refreshTracks);
       room.on(RoomEvent.LocalTrackUnpublished, refreshTracks);
       room.on(RoomEvent.ParticipantConnected, refreshTracks);
       room.on(RoomEvent.ParticipantDisconnected, refreshTracks);
+      room.on(RoomEvent.AudioPlaybackStatusChanged, refreshAudioPlayback);
       room.on(RoomEvent.Reconnecting, () => setPhase('reconnecting'));
       room.on(RoomEvent.Reconnected, () => setPhase('connected'));
       room.on(RoomEvent.Disconnected, () => {
@@ -270,6 +273,12 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
       setPhase('connected');
       setMediaRevision((value) => value + 1);
       setElapsed(0);
+      try {
+        await room.startAudio();
+        setAudioPlaybackBlocked(false);
+      } catch {
+        setAudioPlaybackBlocked(true);
+      }
       try {
         await room.localParticipant.setMicrophoneEnabled(true);
         setMicEnabled(true);
@@ -333,6 +342,18 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     }
   }
 
+  async function enableCallAudio() {
+    const room = roomRef.current;
+    if (!room) return;
+    try {
+      await room.startAudio();
+      setAudioPlaybackBlocked(false);
+    } catch (audioError) {
+      setAudioPlaybackBlocked(true);
+      setMediaNotice(errorText(audioError, 'Call audio could not be enabled. Check your browser audio settings.'));
+    }
+  }
+
   async function enableRingback() {
     try {
       const enabled = await enableSupportCallAudio();
@@ -354,6 +375,7 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
     roomRef.current = null;
     setMicEnabled(false);
     setCameraEnabled(false);
+    setAudioPlaybackBlocked(false);
     setPhase('left');
   }
 
@@ -510,9 +532,20 @@ export default function SupportCallRoomPage({ params }: { params: { callId: stri
         </div>
 
         {mediaNotice && <p className={styles.mediaNotice} role="status">{mediaNotice}</p>}
+        {audioPlaybackBlocked && connected && !mediaNotice && (
+          <p className={styles.mediaNotice} role="status">
+            Your browser blocked incoming call audio. Tap “Enable audio” to hear the other participant.
+          </p>
+        )}
         {error && <p className={styles.inlineError} role="alert">{error}</p>}
         <div className={styles.controls}>
           <div className={styles.mediaControls}>
+            {audioPlaybackBlocked && connected && (
+              <button type="button" className={styles.controlButton} onClick={() => void enableCallAudio()}>
+                <Volume2 size={18} />
+                <span>Enable audio</span>
+              </button>
+            )}
             <button type="button" className={`${styles.controlButton} ${!micEnabled ? styles.controlOff : ''}`} onClick={() => void toggleMicrophone()} disabled={!connected} aria-label={micEnabled ? 'Mute microphone' : 'Unmute microphone'}>
               {micEnabled ? <Mic size={18} /> : <MicOff size={18} />}
               <span>{micEnabled ? 'Mute' : 'Unmute'}</span>

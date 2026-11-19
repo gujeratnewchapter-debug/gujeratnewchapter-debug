@@ -376,7 +376,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'password_reset': '5/hour',
         'password_reset_confirm': '20/hour',
-        'support_call_create': '5/hour',
+        'support_call_create': '10/hour',
         'support_call_status': '12/minute',
         'support_call_token': '5/minute',
         'support_call_admin_token': '30/hour',
